@@ -41,8 +41,8 @@ mem_region_t MEM_REGIONS[] = {
 typedef struct CPU_State_Struct {
 
   uint32_t PC;		                   /* program counter */
-  uint32_t REGS[MIPS_REGS]; 		/* register file. */
-  uint32_t HI, LO;                     /* special regs for mult/div. */
+  uint32_t REGS[MIPS_REGS]; /* register file. */
+  uint32_t HI, LO;                          /* special regs for mult/div. */
 } CPU_State;
 
 

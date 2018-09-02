@@ -6,6 +6,9 @@
 
 #include "mu-mips.h"
 
+uint32_t prevIns;
+
+
 /***************************************************************/
 /* Print out a list of commands available                                                                  */
 /***************************************************************/
@@ -222,7 +225,7 @@ void handle_command() {
 			CURRENT_STATE.LO = lo_reg_value;
 			NEXT_STATE.LO = lo_reg_value;
 			break;
-		case 'P':
+		case 'P':https://www.google.com/search?client=ubuntu&channel=fs&q=c+convert+32+bit+hex&ie=utf-8&oe=utf-8
 		case 'p':
 			print_program(); 
 			break;
@@ -307,6 +310,217 @@ void handle_instruction()
 {
 	/*IMPLEMENT THIS*/
 	/* execute one instruction at a time. Use/update CURRENT_STATE and and NEXT_STATE, as necessary.*/
+	// read each instruction from the input program - use mem_read32 and mem_write32
+	/*mem_read32()
+	.
+	.
+	.
+	parse instruction and execute instruction*/
+	uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
+	uint32_t opc, opctemp, of, value;
+	uint64_t temp;
+	int rs, rt, rd, immediate;
+	int jmpBy = 4; // maybe useful in the jumps?
+
+	// ##### IDK IF THIS IS RIGHT ###############
+	// The opcode can either be on the right, left, or in the middle
+	// If at the right, the 6 most significant bits are 0x0
+	// If in the middle, the 6 most significant bits are 0x01
+	// otherwise, its on the left
+
+	opctemp = instruction & 0xFC000000;
+	opctemp = opctemp >> 26;
+
+	//opcode at right
+	if(opctemp == 0x0){
+		opc = instruction & 0x0000003F;
+	// opcode in middle
+	}else if(opctemp == 0x00000001){
+		opc = instruction & 0x001F0000;
+		opc = opc >> 16;
+	//opcode at left
+	}else{
+		opc = opctemp;
+	}
+	// ##########################################
+
+	// ### is it overflow of the addition, or overflow of the instruction????
+	switch(opc){
+		case 0x00000020: //ADD
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+
+			// OVERFLOW BIT is at the carries out bit of 30 and 31 (if bits 30 and 31 = 1)
+			//of = instruction >> 30;
+			//if((of | 0) == 0){
+			//	NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			//}else{
+			//	printf("ADD OVERFLOW");
+			//}
+
+			value = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			of = value >> 30;
+			if((of | 0x0) == 0x0){
+				NEXT_STATE.REGS[rd] = value;
+			}else{
+				printf("ADD: OVERFLOW");
+			}
+
+
+
+			break;
+		case 0x00000021: //ADDU
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			break;
+		case 0x00000008: //ADDI (need sign extend of immediate) & check overflow
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			immediate = instruction & 0x0000FFFF;
+
+			// sign extend (check if most significant bit is a 1)
+			if(immediate & 0x00008000){
+				immediate = immediate | 0xFFFF0000;
+			}
+
+			value = CURRENT_STATE.REGS[rs] + immediate;
+
+			// check overflow of the addition
+			of = value >> 30;
+			if((of | 0x0) == 0x0){
+				NEXT_STATE.REGS[rt] = value;
+			}else{
+				printf("ADDI: OVERFLOW\n");
+			}
+
+			break;
+		case 0x00000009: //ADDIU
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			immediate = instruction & 0x0000FFFF;
+			// sign extend (check if most significant bit is a 1)
+			if(immediate & 0x00008000){
+				immediate = immediate | 0xFFFF0000;
+			}
+			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + immediate;
+			break;
+		case 0x00000022: //SUB
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+
+			value = CURRENT_STATE.REGS[rs] - CURRENT_STATE.REGS[rt];
+
+			// check overflow
+			of = value >> 30;
+			if((of | 0x0) == 0x0){
+				NEXT_STATE.REGS[rd] = value;
+			}else{
+				printf("SUB: OVERFLOW\n");
+			}
+			break;
+		case 0x00000023: //SUBU
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] - CURRENT_STATE.REGS[rt];
+			break;
+		case 0x00000018: //MULT - you have to check the previous instruction..sign extend???
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+
+			// check if previous instruction was MFHI or MFLO
+			if(prevIns == 0x00000010 | prevIns == 0x00000012){
+				printf("MULT: result is undefined.\n");
+			}else{
+				temp = CURRENT_STATE.REGS[rs] * CURRENT_STATE.REGS[rt]; // temp is 64 bits
+				NEXT_STATE.HI = (temp & 0xFFFFFFFF00000000) >> 32;	// get high bits
+				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;			// get low bits
+			}
+			break;
+		case 0x00000019: //MULTU - unsigned
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+
+			// check if previous instruction was MFHI or MFLO
+			if(prevIns == 0x00000010 | prevIns == 0x00000012){
+				printf("MULTU: result is undefined.\n");
+			}else{
+				temp = CURRENT_STATE.REGS[rs] * CURRENT_STATE.REGS[rt]; // temp is 64 bits
+				NEXT_STATE.HI = (temp & 0xFFFFFFFF00000000) >> 32;	// get high bits
+				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;			// get low bits
+			}
+			break;
+		case 0x0000001A: //DIV - sign extend or 2's complement???
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+
+			//check if previous instruction was MFHI or MFLO
+			if(prevIns == 0x00000010 | prevIns == 00000012){
+				printf("DIV: result is undefined.\n");
+			}else{
+				// check for division by 0
+				if(CURRENT_STATE.REGS[rt] == 0){
+					printf("DIV: cannot divide by 0.\n");
+				}else{
+					NEXT_STATE.HI = CURRENT_STATE.REGS[rs] / CURRENT_STATE.REGS[rt]; // Div = A/B
+					NEXT_STATE.LO = CURRENT_STATE.REGS[rs] % CURRENT_STATE.REGS[rt]; // REM = A%B
+				}
+			}
+			break;
+		case 0x0000001B: //DIVU
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+
+			//check if previous instruction was MFHI or MFLO
+			if(prevIns == 0x00000010 | prevIns == 00000012){
+				printf("DIV: result is undefined.\n");
+			}else{
+				// check for division by 0
+				if(CURRENT_STATE.REGS[rt] == 0){
+					printf("DIV: cannot divide by 0.\n");
+				}else{
+					NEXT_STATE.HI = CURRENT_STATE.REGS[rs] / CURRENT_STATE.REGS[rt]; // Div = A/B
+					NEXT_STATE.LO = CURRENT_STATE.REGS[rs] % CURRENT_STATE.REGS[rt]; // REM = A%B
+				}
+			}
+			break;
+		default:
+			printf("default");
+			break;
+
+
+
+		NEXT_STATE.PC = CURRENT_STATE.PC + jmpBy; // jmpBy is 4 by default
+		prevIns = opc;	// used in MULT, MULTU, DIV, and DIVU
+	}	
 }
 
 
