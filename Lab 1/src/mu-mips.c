@@ -667,7 +667,58 @@ void handle_instruction()
 			NEXT_STATE.REGS[rt] = mem_read_32(base);
 
 			break;
-		
+		case 0x00000004: //BEQ  
+			printf("Branch if equal\n");
+
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+
+			immediate = instruction & 0x0000FFFF;
+			//Shift left by 2
+			immediate = immediate << 2;
+			// sign extend (check if most significant bit is a 1)
+			if(((immediate & 0x00008000)>>15)){
+				immediate = immediate | 0xFFFF0000;
+			}
+			if(CURRENT_STATE.REGS[rs] == CURRENT_STATE.REGS[rt]){
+				NEXT_STATE.PC = CURRENT_STATE.PC + immediate;
+			}
+		break;
+		case 0x00000005: //BNE
+			printf("BRANCH IF NOT EQUAL\n");
+
+	  		rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+
+			immediate = instruction & 0x0000FFFF;
+			immediate = immediate << 2;
+			if(((immediate & 0x00008000)>>15)){
+				immediate = immediate | 0xFFFF0000;
+			}
+			if(CURRENT_STATE.REGS[rs] != CURRENT_STATE.REGS[rt]){
+				NEXT_STATE.PC = CURRENT_STATE.PC + immediate;
+			}
+		break;
+		case 0x00000006: //BLEZ
+			printf("BRANCH ON LESS THAN OR EQUAL TO ZERO\n");
+	  		rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			
+			immediate = instruction & 0x0000FFFF;
+			immediate = immediate << 2;
+			if(((immediate & 0x00008000)>>15)){
+				immediate = immediate | 0xFFFF0000;
+			}
+			if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) || (CURRENT_STATE.REGS[rs] == 0x00)){
+				NEXT_STATE.PC = CURRENT_STATE.PC + immediate;
+			}
+		break;
 		
 		default:
 			printf("default");
