@@ -319,8 +319,9 @@ void handle_instruction()
 	uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
 	uint32_t opc, opctemp, of, value;
 	uint64_t temp;
-	int rs, rt, rd, immediate;
+	int rs, rt, rd, immediate, offset, base;
 	int jmpBy = 4; // maybe useful in the jumps?
+	bool left, right;
 
 	// ##### IDK IF THIS IS RIGHT ###############
 	// The opcode can either be on the right, left, or in the middle
@@ -333,6 +334,8 @@ void handle_instruction()
 
 	//opcode at right
 	if(opctemp == 0x0){
+		right = true;
+		left = false;
 		opc = instruction & 0x0000003F;
 	// opcode in middle
 	}else if(opctemp == 0x00000001){
@@ -340,47 +343,59 @@ void handle_instruction()
 		opc = opc >> 16;
 	//opcode at left
 	}else{
+		left = true;
+		right = false;
 		opc = opctemp;
 	}
 	// ##########################################
 
 	// ### is it overflow of the addition, or overflow of the instruction????
 	switch(opc){
-		case 0x00000020: //ADD
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
+		case 0x00000020: 
+			if(right){ // ADD
+				rs = instruction & 0x03E00000;
+				rs = rs >> 21;
+				rt = instruction & 0x001F0000;
+				rt = rt >> 16;
+				rd = instruction & 0x0000F800;
+				rd = rd >> 11;
 
-			// OVERFLOW BIT is at the carries out bit of 30 and 31 (if bits 30 and 31 = 1)
-			//of = instruction >> 30;
-			//if((of | 0) == 0){
-			//	NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
-			//}else{
-			//	printf("ADD OVERFLOW");
-			//}
-
-			value = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
-			of = value >> 30;
-			if((of | 0x0) == 0x0){
-				NEXT_STATE.REGS[rd] = value;
-			}else{
-				printf("ADD: OVERFLOW");
+				CURRENT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			}else{ // LB
+				offset = instruction & 0x0000FFFF;
+				rt = instruction & 0x001F0000;
+				base = instruction & 0x03E00000;
+			
+				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
+			
+				base = base+offset;
+				value = mem_read_32(base) & 0x000000FF;
+				value = (value & 0x00000080) == 0x80 ? 0xFFFFFF00 | value : value;
+				NEXT_STATE.REGS[rt] = value;
 			}
-			
 			break;
-			
 		case 0x00000021: //ADDU
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
-			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			if(right){ // ADDU
+				rs = instruction & 0x03E00000;
+				rs = rs >> 21;
+				rt = instruction & 0x001F0000;
+				rt = rt >> 16;
+				rd = instruction & 0x0000F800;
+				rd = rd >> 11;
+
+				CURRENT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			}else{ // LH
+				offset = instruction & 0x0000FFFF;
+				rt = instruction & 0x001F0000;
+				base = instruction & 0x03E00000;
 			
+				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
+			
+				base = base+offset;
+				value = mem_read_32(base) & 0x000000FF;
+				value = (value & 0x00008000) == 0x8000 ? 0xFFFF0000 | value : value;
+				NEXT_STATE.REGS[rt] = value;	
+			}
 			break;
 			
 		case 0x00000008: //ADDI (need sign extend of immediate) & check overflow
@@ -389,23 +404,8 @@ void handle_instruction()
 			rt = instruction & 0x001F0000;
 			rt = rt >> 16;
 			immediate = instruction & 0x0000FFFF;
-
-			// sign extend (check if most significant bit is a 1)
-			if(immediate & 0x00008000){
-				immediate = immediate | 0xFFFF0000;
-			}
-
-			value = CURRENT_STATE.REGS[rs] + immediate;
-
-			// check overflow of the addition
-			of = value >> 30;
-			if((of | 0x0) == 0x0){
-				NEXT_STATE.REGS[rt] = value;
-			}else{
-				printf("ADDI: OVERFLOW\n");
-			}
-
-			break;
+			value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
+			CURRENT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
 			
 		case 0x00000009: //ADDIU
 			rs = instruction & 0x03E00000;
@@ -413,11 +413,8 @@ void handle_instruction()
 			rt = instruction & 0x001F0000;
 			rt = rt >> 16;
 			immediate = instruction & 0x0000FFFF;
-			// sign extend (check if most significant bit is a 1)
-			if(immediate & 0x00008000){
-				immediate = immediate | 0xFFFF0000;
-			}
-			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + immediate;
+			value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
+			CURRENT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
 			break;
 			
 		case 0x00000022: //SUB
@@ -477,7 +474,7 @@ void handle_instruction()
 			}else{
 				temp = CURRENT_STATE.REGS[rs] * CURRENT_STATE.REGS[rt]; // temp is 64 bits
 				NEXT_STATE.HI = (temp & 0xFFFFFFFF00000000) >> 32;	// get high bits
-				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;			// get low bits
+				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;		// get low bits
 			}
 			break;
 			
@@ -597,12 +594,12 @@ void handle_instruction()
 			rd = instruction & 0x0000F800;
 			rd = rd >> 11;
 			if(CURRENT_STATE.REGS[rs] < CURRENT_STATE.REGS[rt]){
-                NEXT_STATE.REGS[rd] = 0x01;
+                		NEXT_STATE.REGS[rd] = 0x01;
 			}
-            else{
-                NEXT_STATE.REGS[rd] = 0x00;
-            }
-		break;
+            		else{
+                		NEXT_STATE.REGS[rd] = 0x00;
+            		}
+			break;
 		
 		case 0x0000000A: //SLTI
 			rs = instruction & 0x03E00000;
@@ -616,12 +613,12 @@ void handle_instruction()
 				immediate = immediate | 0xFFFF0000;
 			}
 			if(CURRENT_STATE.REGS[rs] < immediate){
-                NEXT_STATE.REGS[rt] = 0x01;
-            }
-            else{
-                NEXT_STATE.REGS[rt] = 0x00;
-            }
-		break;
+                		NEXT_STATE.REGS[rt] = 0x01;
+            		}
+            		else{
+                		NEXT_STATE.REGS[rt] = 0x00;
+            		}
+			break;
 		
 		case 0x00000000: //SLL
 			immediate = instruction & 0x000007C0;
@@ -658,7 +655,18 @@ void handle_instruction()
 			}else{
 				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
 			}
-		break;
+			break;
+		case 0x00000023: // LW
+			offset = instruction & 0x0000FFFF;
+			rt = instruction & 0x001F0000;
+			base = instruction & 0x03E00000;
+			
+			offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
+			
+			base = base+offset;
+			NEXT_STATE.REGS[rt] = mem_read_32(base);
+
+			break;
 		
 		
 		default:
