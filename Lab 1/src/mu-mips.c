@@ -369,10 +369,9 @@ void handle_instruction()
 			}else{
 				printf("ADD: OVERFLOW");
 			}
-
-
-
+			
 			break;
+			
 		case 0x00000021: //ADDU
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -381,7 +380,9 @@ void handle_instruction()
 			rd = instruction & 0x0000F800;
 			rd = rd >> 11;
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+			
 			break;
+			
 		case 0x00000008: //ADDI (need sign extend of immediate) & check overflow
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -405,6 +406,7 @@ void handle_instruction()
 			}
 
 			break;
+			
 		case 0x00000009: //ADDIU
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -417,6 +419,7 @@ void handle_instruction()
 			}
 			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + immediate;
 			break;
+			
 		case 0x00000022: //SUB
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -435,6 +438,7 @@ void handle_instruction()
 				printf("SUB: OVERFLOW\n");
 			}
 			break;
+			
 		case 0x00000023: //SUBU
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -444,6 +448,7 @@ void handle_instruction()
 			rd = rd >> 11;
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] - CURRENT_STATE.REGS[rt];
 			break;
+			
 		case 0x00000018: //MULT - you have to check the previous instruction..sign extend???
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -459,6 +464,7 @@ void handle_instruction()
 				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;			// get low bits
 			}
 			break;
+			
 		case 0x00000019: //MULTU - unsigned
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -474,6 +480,7 @@ void handle_instruction()
 				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;			// get low bits
 			}
 			break;
+			
 		case 0x0000001A: //DIV - sign extend or 2's complement???
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -493,6 +500,7 @@ void handle_instruction()
 				}
 			}
 			break;
+			
 		case 0x0000001B: //DIVU
 			rs = instruction & 0x03E00000;
 			rs = rs >> 21;
@@ -512,6 +520,147 @@ void handle_instruction()
 				}
 			}
 			break;
+			
+		case 0x00000024: //AND
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] & CURRENT_STATE.REGS[rt];
+			break;
+			
+		case 0x0000000C: //ANDI
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			immediate = instruction & 0x0000FFFF;
+			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] & immediate;
+			break;
+			
+		case 0x00000025: //OR
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] | CURRENT_STATE.REGS[rt];
+			break;
+			
+		case 0x000000D: //ORI
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			immediate = instruction & 0x0000FFFF;
+			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] & immediate;
+			break;
+			
+		case 0x00000026: //XOR
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] ^ CURRENT_STATE.REGS[rt];
+		
+		break;
+		
+		case 0x000000E: //XORI 
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			immediate = instruction & 0x0000FFFF;
+			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] ^ immediate;
+		break;
+		
+		case 0x00000027: //NOR
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = ~ (CURRENT_STATE.REGS[rs] | CURRENT_STATE.REGS[rt]);
+		break;
+		
+		case 0x0000002A: //SLT
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			if(CURRENT_STATE.REGS[rs] < CURRENT_STATE.REGS[rt]){
+                NEXT_STATE.REGS[rd] = 0x01;
+			}
+            else{
+                NEXT_STATE.REGS[rd] = 0x00;
+            }
+		break;
+		
+		case 0x0000000A: //SLTI
+			rs = instruction & 0x03E00000;
+			rs = rs >> 21;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			immediate = instruction & 0x0000FFFF;
+
+			// sign extend (check if most significant bit is a 1)
+			if(((immediate & 0x00008000)>>15)){
+				immediate = immediate | 0xFFFF0000;
+			}
+			if(CURRENT_STATE.REGS[rs] < immediate){
+                NEXT_STATE.REGS[rt] = 0x01;
+            }
+            else{
+                NEXT_STATE.REGS[rt] = 0x00;
+            }
+		break;
+		
+		case 0x00000000: //SLL
+			immediate = instruction & 0x000007C0;
+			immediate = immediate >> 6;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] << immediate;
+		
+		break;
+		
+		case 0x00000002: //SRL
+			immediate = instruction & 0x000007C0;
+			immediate = immediate >> 6;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
+		break;
+		
+		case 0x00000003: //SRA  
+			immediate = instruction & 0x000007C0;
+			immediate = immediate >> 6;
+			rt = instruction & 0x001F0000;
+			rt = rt >> 16;
+			rd = instruction & 0x0000F800;
+			rd = rd >> 11;
+			
+			if((CURRENT_STATE.REGS[rt]&0x80000000)>>31){
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
+				NEXT_STATE.REGS[rd] |= 0x80000000;
+			}else{
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
+			}
+		break;
+		
+		
 		default:
 			printf("default");
 			break;
