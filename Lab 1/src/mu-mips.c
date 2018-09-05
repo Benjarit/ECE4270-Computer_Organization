@@ -370,7 +370,7 @@ void handle_instruction()
 		case 0x00000020: 
 			if(right){ // ADD
 				printf("# ADD\n");
-				CURRENT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
 			}else{ // LB
 				printf("# LB\n");
 				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
@@ -383,7 +383,7 @@ void handle_instruction()
 		case 0x00000021: //ADDU
 			if(right){ // ADDU
 				printf("# ADDU\n");
-				CURRENT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
 			}else{ // LH
 				printf("# LH\n");
 				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
@@ -397,13 +397,15 @@ void handle_instruction()
 			
 		case 0x00000008: //ADDI (need sign extend of immediate) & check overflow
 			printf("# ADDI\n");
+			//printf("ADDI %u %u %u\n", rs, rt, immediate);
 			value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
-			CURRENT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
+			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
+			printf("ADDI\nrs=%d\nrt=%d\nimmediate=%d\n[rs]=%d\n[rt]=%d\nvalue=%d\n",rs,rt,immediate,NEXT_STATE.REGS[rt], CURRENT_STATE.REGS[rs], value);
 			break;
 		case 0x00000009: //ADDIU
 			printf("# ADDIU\n");
 			value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
-			CURRENT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
+			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
 			break;
 			
 		case 0x00000022: //SUB
