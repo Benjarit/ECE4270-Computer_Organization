@@ -616,6 +616,28 @@ void handle_instruction()
 				jmpBy = offset; // changed
 			}
 			break;
+		case 0x00000000: //BLTZ
+			
+			
+			break;
+		case 0x00000001: //BGEZ
+			
+			break;
+		case 0x00000007: //BGTZ
+			
+			break;
+		case 0x00000020: //J
+			
+			break;
+		case 0x00000008: //JR
+			
+			break;
+		case 0x00000003: //JAL
+			
+			break;	
+		case 0x00000009: //JALR
+			
+			break;
 		case 0x0000000F: // LUI
 		 	printf("# LUI\n");
 		 	NEXT_STATE.REGS[rt] = (immediate << 16) | 0x0000; // the & is just to assure that the lower 16 bits are zeros
