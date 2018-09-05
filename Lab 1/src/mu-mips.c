@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include "mu-mips.h"
 
@@ -317,11 +318,11 @@ void handle_instruction()
 	.
 	parse instruction and execute instruction*/
 	uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
-	uint32_t opc, opctemp, of, value;
-	uint64_t temp;
-	int rs, rt, rd, immediate, offset, base;
+	uint32_t opc, opctemp, of, value, value1, rs, rt, rd, immediate, offset, base;
+	int64_t temp;
+	//int rs, rt, rd, immediate, offset, base;
 	int jmpBy = 4; // maybe useful in the jumps?
-	bool left, right;
+	bool left, right, middle;
 
 	// ##### IDK IF THIS IS RIGHT ###############
 	// The opcode can either be on the right, left, or in the middle
@@ -329,147 +330,123 @@ void handle_instruction()
 	// If in the middle, the 6 most significant bits are 0x01
 	// otherwise, its on the left
 
-	opctemp = instruction & 0xFC000000;
+	opctemp = instruction & 0xF0C00000;
 	opctemp = opctemp >> 26;
 
 	//opcode at right
 	if(opctemp == 0x0){
 		right = true;
 		left = false;
+		middle = false;
 		opc = instruction & 0x0000003F;
 	// opcode in middle
 	}else if(opctemp == 0x00000001){
+		right = false;
+		left = false;
+		middle = true;
 		opc = instruction & 0x001F0000;
 		opc = opc >> 16;
 	//opcode at left
 	}else{
 		left = true;
 		right = false;
+		middle = false;
 		opc = opctemp;
 	}
 	// ##########################################
-
+	rs = instruction & 0x03E00000;
+	rs = rs >> 21;
+	rt = instruction & 0x001F0000;
+	rt = rt >> 16;
+	rd = instruction & 0x0000F800;
+	rd = rd >> 11;
+	offset = instruction & 0x0000FFFF;
+	base = instruction & 0x03E00000;
+	base = base >> 21;
+	immediate = instruction & 0x0000FFFF;
 	// ### is it overflow of the addition, or overflow of the instruction????
+	
 	switch(opc){
 		case 0x00000020: 
 			if(right){ // ADD
-				rs = instruction & 0x03E00000;
-				rs = rs >> 21;
-				rt = instruction & 0x001F0000;
-				rt = rt >> 16;
-				rd = instruction & 0x0000F800;
-				rd = rd >> 11;
-
+				printf("# ADD\n");
 				CURRENT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
 			}else{ // LB
-				offset = instruction & 0x0000FFFF;
-				rt = instruction & 0x001F0000;
-				base = instruction & 0x03E00000;
-			
+				printf("# LB\n");
 				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
-			
-				base = base+offset;
-				value = mem_read_32(base) & 0x000000FF;
-				value = (value & 0x00000080) == 0x80 ? 0xFFFFFF00 | value : value;
-				NEXT_STATE.REGS[rt] = value;
+				value = CURRENT_STATE.REGS[base] + offset;
+				value1 = mem_read_32(value) & 0x000000FF;
+				value1 = (value1 & 0x00000080) == 0x80 ? 0xFFFFFF00 | value1 : value1;
+				NEXT_STATE.REGS[rt] = value1;
 			}
 			break;
 		case 0x00000021: //ADDU
 			if(right){ // ADDU
-				rs = instruction & 0x03E00000;
-				rs = rs >> 21;
-				rt = instruction & 0x001F0000;
-				rt = rt >> 16;
-				rd = instruction & 0x0000F800;
-				rd = rd >> 11;
-
+				printf("# ADDU\n");
 				CURRENT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
 			}else{ // LH
-				offset = instruction & 0x0000FFFF;
-				rt = instruction & 0x001F0000;
-				base = instruction & 0x03E00000;
-			
+				printf("# LH\n");
 				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
 			
-				base = base+offset;
-				value = mem_read_32(base) & 0x000000FF;
-				value = (value & 0x00008000) == 0x8000 ? 0xFFFF0000 | value : value;
-				NEXT_STATE.REGS[rt] = value;	
+				value = CURRENT_STATE.REGS[base] + offset;
+				value1 = mem_read_32(value) & 0x000000FF;
+				value1 = (value1 & 0x00008000) == 0x8000 ? 0xFFFF0000 | value1 : value1;
+				NEXT_STATE.REGS[rt] = value1;	
 			}
 			break;
 			
 		case 0x00000008: //ADDI (need sign extend of immediate) & check overflow
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			immediate = instruction & 0x0000FFFF;
+			printf("# ADDI\n");
 			value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
 			CURRENT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
-			
+			break;
 		case 0x00000009: //ADDIU
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			immediate = instruction & 0x0000FFFF;
+			printf("# ADDIU\n");
 			value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
 			CURRENT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
 			break;
 			
 		case 0x00000022: //SUB
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
-
+			printf("# SUB\n");
 			value = CURRENT_STATE.REGS[rs] - CURRENT_STATE.REGS[rt];
 
 			// check overflow
-			of = value >> 30;
-			if((of | 0x0) == 0x0){
-				NEXT_STATE.REGS[rd] = value;
-			}else{
-				printf("SUB: OVERFLOW\n");
+			// of = value >> 30;
+			// if((of | 0x0) == 0x0){
+			 NEXT_STATE.REGS[rd] = value;
+			// }else{
+			// 	printf("SUB: OVERFLOW\n");
+			// }
+			 break;
+			
+		case 0x00000023:
+			if(right){	//SUBU
+				printf("# SUBU\n");
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] - CURRENT_STATE.REGS[rt];
+			}else{ // LW
+				printf("# LW\n");
+				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
+				offset = CURRENT_STATE.REGS[base] + offset;
+				NEXT_STATE.REGS[rt] = mem_read_32(offset);
 			}
 			break;
 			
-		case 0x00000023: //SUBU
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
-			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] - CURRENT_STATE.REGS[rt];
-			break;
-			
 		case 0x00000018: //MULT - you have to check the previous instruction..sign extend???
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-
+			printf("# MULT\n");
 			// check if previous instruction was MFHI or MFLO
-			if(prevIns == 0x00000010 | prevIns == 0x00000012){
+			if((prevIns == 0x00000010) | (prevIns == 0x00000012)){
 				printf("MULT: result is undefined.\n");
 			}else{
 				temp = CURRENT_STATE.REGS[rs] * CURRENT_STATE.REGS[rt]; // temp is 64 bits
 				NEXT_STATE.HI = (temp & 0xFFFFFFFF00000000) >> 32;	// get high bits
-				NEXT_STATE.LO = temp & 0x00000000FFFFFFFF;			// get low bits
+				NEXT_STATE.LO = (temp & 0x00000000FFFFFFFF) & 0xFFFFFFFF;	// get low bits
 			}
 			break;
 			
 		case 0x00000019: //MULTU - unsigned
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-
+			printf("# MULTU\n");
 			// check if previous instruction was MFHI or MFLO
-			if(prevIns == 0x00000010 | prevIns == 0x00000012){
+			if((prevIns == 0x00000010) | (prevIns == 0x00000012)){
 				printf("MULTU: result is undefined.\n");
 			}else{
 				temp = CURRENT_STATE.REGS[rs] * CURRENT_STATE.REGS[rt]; // temp is 64 bits
@@ -479,13 +456,9 @@ void handle_instruction()
 			break;
 			
 		case 0x0000001A: //DIV - sign extend or 2's complement???
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-
+			printf("# DIV\n");
 			//check if previous instruction was MFHI or MFLO
-			if(prevIns == 0x00000010 | prevIns == 00000012){
+			if((prevIns == 0x00000010) | (prevIns == 00000012)){
 				printf("DIV: result is undefined.\n");
 			}else{
 				// check for division by 0
@@ -499,13 +472,9 @@ void handle_instruction()
 			break;
 			
 		case 0x0000001B: //DIVU
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-
+			printf("# DIVU\n");
 			//check if previous instruction was MFHI or MFLO
-			if(prevIns == 0x00000010 | prevIns == 00000012){
+			if((prevIns == 0x00000010) | (prevIns == 00000012)){
 				printf("DIV: result is undefined.\n");
 			}else{
 				// check for division by 0
@@ -519,135 +488,88 @@ void handle_instruction()
 			break;
 			
 		case 0x00000024: //AND
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
+			printf("# AND\n");
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] & CURRENT_STATE.REGS[rt];
 			break;
 			
-		case 0x0000000C: //ANDI
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			immediate = instruction & 0x0000FFFF;
-			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] & immediate;
+		case 0x0000000C: 
+			if(left){ //ANDI
+				printf("# ANDI\n");
+				NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] & immediate;
+			}else{ //SYSCALL
+				if(CURRENT_STATE.REGS[2] = 0xA){ // IF I DO == THEN IT DOESNT WORK?????
+					RUN_FLAG = false;
+				}
+			}
+
 			break;
 			
 		case 0x00000025: //OR
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
+			printf("# OR\n");
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] | CURRENT_STATE.REGS[rt];
 			break;
 			
 		case 0x000000D: //ORI
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			immediate = instruction & 0x0000FFFF;
+			printf("# ORI\n");
 			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] & immediate;
 			break;
 			
 		case 0x00000026: //XOR
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
+			printf("# XOR\n");
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] ^ CURRENT_STATE.REGS[rt];
+			break;
 		
-		break;
-		
-		case 0x000000E: //XORI 
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			immediate = instruction & 0x0000FFFF;
+		case 0x000000E: //XORI
+			printf("# XORI\n");
 			NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] ^ immediate;
-		break;
+			break;
 		
 		case 0x00000027: //NOR
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
+			printf("# NOR\n");
 			NEXT_STATE.REGS[rd] = ~ (CURRENT_STATE.REGS[rs] | CURRENT_STATE.REGS[rt]);
-		break;
+			break;
 		
 		case 0x0000002A: //SLT
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
+			printf("# SLT\n");
 			if(CURRENT_STATE.REGS[rs] < CURRENT_STATE.REGS[rt]){
-                		NEXT_STATE.REGS[rd] = 0x01;
+                NEXT_STATE.REGS[rd] = 0x01;
 			}
-            		else{
-                		NEXT_STATE.REGS[rd] = 0x00;
-            		}
+            else{
+                NEXT_STATE.REGS[rd] = 0x00;
+            }
 			break;
 		
 		case 0x0000000A: //SLTI
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			immediate = instruction & 0x0000FFFF;
-
+			printf("# SLTI\n");
 			// sign extend (check if most significant bit is a 1)
 			if(((immediate & 0x00008000)>>15)){
 				immediate = immediate | 0xFFFF0000;
 			}
 			if(CURRENT_STATE.REGS[rs] < immediate){
-                		NEXT_STATE.REGS[rt] = 0x01;
-            		}
-            		else{
-                		NEXT_STATE.REGS[rt] = 0x00;
-            		}
+                NEXT_STATE.REGS[rt] = 0x01;
+            }
+            else{
+                NEXT_STATE.REGS[rt] = 0x00;
+            }
 			break;
 		
 		case 0x00000000: //SLL
+			printf("# SLL\n");
 			immediate = instruction & 0x000007C0;
 			immediate = immediate >> 6;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] << immediate;
-		
-		break;
-		
+			break;
 		case 0x00000002: //SRL
+			printf("# SRL\n");
 			immediate = instruction & 0x000007C0;
 			immediate = immediate >> 6;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
 		break;
 		
-		case 0x00000003: //SRA  
+		case 0x00000003: //SRA 
+			printf("# SRA\n");
 			immediate = instruction & 0x000007C0;
 			immediate = immediate >> 6;
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-			rd = instruction & 0x0000F800;
-			rd = rd >> 11;
 			
 			if((CURRENT_STATE.REGS[rt]&0x80000000)>>31){
 				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
@@ -656,79 +578,95 @@ void handle_instruction()
 				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
 			}
 			break;
-		case 0x00000023: // LW
-			offset = instruction & 0x0000FFFF;
-			rt = instruction & 0x001F0000;
-			base = instruction & 0x03E00000;
-			
-			offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
-			
-			base = base+offset;
-			NEXT_STATE.REGS[rt] = mem_read_32(base);
 
-			break;
-		case 0x00000004: //BEQ  
+		case 0x00000004: //BEQ 
+			printf("# BEQ\n");
 			printf("Branch if equal\n");
-
-			rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-
-			immediate = instruction & 0x0000FFFF;
 			//Shift left by 2
-			immediate = immediate << 2;
+			offset = offset << 2;
 			// sign extend (check if most significant bit is a 1)
-			if(((immediate & 0x00008000)>>15)){
-				immediate = immediate | 0xFFFF0000;
+			if(((offset & 0x00008000)>>15)){
+				offset = offset | 0xFFFF0000;
 			}
 			if(CURRENT_STATE.REGS[rs] == CURRENT_STATE.REGS[rt]){
-				NEXT_STATE.PC = CURRENT_STATE.PC + immediate;
+				jmpBy = offset; //changed
 			}
-		break;
-		case 0x00000005: //BNE
-			printf("BRANCH IF NOT EQUAL\n");
-
-	  		rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			
-			rt = instruction & 0x001F0000;
-			rt = rt >> 16;
-
-			immediate = instruction & 0x0000FFFF;
-			immediate = immediate << 2;
-			if(((immediate & 0x00008000)>>15)){
-				immediate = immediate | 0xFFFF0000;
-			}
-			if(CURRENT_STATE.REGS[rs] != CURRENT_STATE.REGS[rt]){
-				NEXT_STATE.PC = CURRENT_STATE.PC + immediate;
-			}
-		break;
-		case 0x00000006: //BLEZ
-			printf("BRANCH ON LESS THAN OR EQUAL TO ZERO\n");
-	  		rs = instruction & 0x03E00000;
-			rs = rs >> 21;
-			
-			immediate = instruction & 0x0000FFFF;
-			immediate = immediate << 2;
-			if(((immediate & 0x00008000)>>15)){
-				immediate = immediate | 0xFFFF0000;
-			}
-			if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) || (CURRENT_STATE.REGS[rs] == 0x00)){
-				NEXT_STATE.PC = CURRENT_STATE.PC + immediate;
-			}
-		break;
-		
-		default:
-			printf("default");
 			break;
 
+		case 0x00000005: //BNE
+			printf("# BNE\n");
 
+			offset = offset << 2;
+			if(((offset & 0x00008000)>>15)){
+				offset = offset | 0xFFFF0000;
+			}
+			if(CURRENT_STATE.REGS[rs] != CURRENT_STATE.REGS[rt]){
+				jmpBy = offset; //changed
+			}
+			break;
+		case 0x00000006: //BLEZ
+			printf("BLEZ\n");
+			offset = offset << 2;
+			if(((offset & 0x00008000)>>15)){
+				offset = offset | 0xFFFF0000;
+			}
+			if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) || (CURRENT_STATE.REGS[rs] == 0x00)){
+				jmpBy = offset; // changed
+			}
+			break;
+		case 0x0000000F: // LUI
+		 	printf("# LUI\n");
+		 	NEXT_STATE.REGS[rt] = (immediate << 16) | 0x0000; // the & is just to assure that the lower 16 bits are zeros
+		 	break;
+		case 0x0000002B: // SW
+			printf("# SW\n");
+			if(((offset & 0x00008000)>>15)){
+				offset = offset | 0xFFFF0000;
+			}
+			value = CURRENT_STATE.REGS[base] + offset;
+			//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
+			mem_write_32(value, CURRENT_STATE.REGS[rt]);
+			break;
+		case 0x00000028: // SB
+			printf("# SB\n");
+			if(((offset & 0x00008000)>>15)){
+				offset = offset | 0xFFFF0000;
+			}
+			value = CURRENT_STATE.REGS[base] + offset;
+			//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
+			mem_write_32(value, CURRENT_STATE.REGS[rt] & 0x000000FF);
+			break;
+		case 0x00000029: //SH
+			printf("# SH\n");
+			offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
+			value = CURRENT_STATE.REGS[base] + offset;
+			//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
+			mem_write_32(value, CURRENT_STATE.REGS[rt] & 0x0000FFFF);
+			break;
+		case 0x00000010: // MFHI
+			printf("MFHI\n");
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.HI;
+			break;
+		case 0x00000012: // MFLO
+			printf("MFLO\n");
+			NEXT_STATE.REGS[rd] = CURRENT_STATE.LO;
+			break;
+		case 0x00000011: // MTHI
+			printf("MTHI\n");
+			NEXT_STATE.HI = CURRENT_STATE.REGS[rs];
+			break;
+		case 0x00000013: // MTLO
+			printf("MTLO\n");
+			NEXT_STATE.LO = CURRENT_STATE.REGS[rs];
+			break;
 
-		NEXT_STATE.PC = CURRENT_STATE.PC + jmpBy; // jmpBy is 4 by default
-		prevIns = opc;	// used in MULT, MULTU, DIV, and DIVU
-	}	
+		default:
+			printf("default\n");
+			break;
+
+	}
+	NEXT_STATE.PC = CURRENT_STATE.PC + jmpBy; // jmpBy is 4 by default
+	prevIns = opc;	// used in MULT, MULTU, DIV, and DIVU	
 }
 
 
