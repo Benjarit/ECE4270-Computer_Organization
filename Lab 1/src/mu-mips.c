@@ -555,11 +555,23 @@ void handle_instruction()
             }
 			break;
 		
-		case 0x00000000: //SLL
-			printf("# SLL\n");
-			immediate = instruction & 0x000007C0;
-			immediate = immediate >> 6;
-			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] << immediate;
+		case 0x00000000: //SLL,BLTZ
+			if(middle){ //BLTZ
+				printf("# BLTZ\n");
+				offset = offset << 2;
+				// sign extend (check if most significant bit is a 1)
+				if(((offset & 0x00008000)>>15)){
+					offset = offset | 0xFFFF0000;
+				}
+				if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31)){
+					jmpBy = offset; // changed
+				}
+			}else{ //SLL
+				printf("# SLL\n");
+				immediate = instruction & 0x000007C0;
+				immediate = immediate >> 6;
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] << immediate;
+			}
 			break;
 		case 0x00000002: //SRL
 			printf("# SRL\n");
@@ -615,10 +627,6 @@ void handle_instruction()
 			if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) || (CURRENT_STATE.REGS[rs] == 0x00)){
 				jmpBy = offset; // changed
 			}
-			break;
-		case 0x00000000: //BLTZ
-			
-			
 			break;
 		case 0x00000001: //BGEZ
 			
