@@ -318,9 +318,9 @@ void handle_instruction()
 	.
 	parse instruction and execute instruction*/
 	uint32_t instruction = mem_read_32(CURRENT_STATE.PC);
-	uint32_t temp,target;
+	uint32_t target;
 	uint32_t highBits = 0xFFFFFFFF;
-	uint32_t opc, opctemp, of, value, value1, rs, rt, rd, immediate, offset, base;
+	uint32_t opc, opctemp, location, value, value1, rs, rt, rd, immediate, offset, base;
 	int64_t temp;
 	//int rs, rt, rd, immediate, offset, base;
 	int jmpBy = 4; // maybe useful in the jumps?
@@ -332,7 +332,7 @@ void handle_instruction()
 	// If in the middle, the 6 most significant bits are 0x01
 	// otherwise, its on the left
 
-	opctemp = instruction & 0xF0C00000;
+	opctemp = instruction & 0xFC000000;
 	opctemp = opctemp >> 26;
 
 	//opcode at right
@@ -366,6 +366,10 @@ void handle_instruction()
 	base = instruction & 0x03E00000;
 	base = base >> 21;
 	immediate = instruction & 0x0000FFFF;
+
+
+
+
 	// ### is it overflow of the addition, or overflow of the instruction????
 	
 	switch(opc){
@@ -373,7 +377,9 @@ void handle_instruction()
 			if(right){ // ADD
 				printf("# ADD\n");
 				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
-			}else{ // LB
+				//printf("\tBefore:\n\trs=%d\t0x%x\n\trt=%d\t0x%x\n\trd=%d\n", rs, CURRENT_STATE.REGS[rs], rt, CURRENT_STATE.REGS[rt], rd);
+				//printf("\tAfter:\n\t[rd]=0x%x\n", NEXT_STATE.REGS[rd]);
+			}else if(left){ // LB
 				printf("# LB\n");
 				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
 				value = CURRENT_STATE.REGS[base] + offset;
@@ -386,12 +392,14 @@ void handle_instruction()
 			if(right){ // ADDU
 				printf("# ADDU\n");
 				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rs] + CURRENT_STATE.REGS[rt];
+				//printf("\tBefore:\n\trs=%d\t0x%x\n\trt=%d\t0x%x\n\trd=%d\n", rs, CURRENT_STATE.REGS[rs], rt, CURRENT_STATE.REGS[rt], rd);
+				//printf("\tAfter:\n\t[rd]=0x%x\n", NEXT_STATE.REGS[rd]);
 			}else{ // LH
 				printf("# LH\n");
 				offset = (offset & 0x00008000) == 0x8000 ? 0xFFFF0000 | offset : offset;
 			
 				value = CURRENT_STATE.REGS[base] + offset;
-				value1 = mem_read_32(value) & 0x000000FF;
+				value1 = mem_read_32(value) & 0x0000FFFF;
 				value1 = (value1 & 0x00008000) == 0x8000 ? 0xFFFF0000 | value1 : value1;
 				NEXT_STATE.REGS[rt] = value1;	
 			}
@@ -402,12 +410,13 @@ void handle_instruction()
 				printf("# JR\n");
 				jmpBy = CURRENT_STATE.REGS[rs] - CURRENT_STATE.PC;
 			}
-			else{
+			else{ // ADDI
 				printf("# ADDI\n");
 				//printf("ADDI %u %u %u\n", rs, rt, immediate);
 				value = (immediate & 0x00008000) == 0x8000 ? 0xFFFF0000 | immediate : immediate;
 				NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] + value;
-				printf("ADDI\nrs=%d\nrt=%d\nimmediate=%d\n[rs]=%d\n[rt]=%d\nvalue=%d\n",rs,rt,immediate,NEXT_STATE.REGS[rt], CURRENT_STATE.REGS[rs], value);
+
+				//printf("ADDI\nrs=%d\nrt=%d\nimmediate=%d\n[rs]=%d\n[rt]=%d\nvalue=%d\n",rs,rt,immediate,NEXT_STATE.REGS[rt], CURRENT_STATE.REGS[rs], value);
 			}
 			break;
 		case 0x00000009: //ADDIU,JALR
@@ -514,7 +523,7 @@ void handle_instruction()
 				printf("# ANDI\n");
 				NEXT_STATE.REGS[rt] = CURRENT_STATE.REGS[rs] & immediate;
 			}else{ //SYSCALL
-				if(CURRENT_STATE.REGS[2] = 0xA){ // IF I DO == THEN IT DOESNT WORK?????
+				if(CURRENT_STATE.REGS[2] == 0xA){ // check register $v0 = $2 for the value 10
 					RUN_FLAG = false;
 				}
 			}
@@ -588,19 +597,29 @@ void handle_instruction()
 				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] << immediate;
 			}
 			break;
-		case 0x00000002: //SRL
-			printf("# SRL\n");
-			immediate = instruction & 0x000007C0;
-			immediate = immediate >> 6;
-			NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
-		break;
+		case 0x00000002: 
+			if(right){	//SRL
+				printf("# SRL\n");
+				immediate = instruction & 0x000007C0;
+				immediate = immediate >> 6;
+				NEXT_STATE.REGS[rd] = CURRENT_STATE.REGS[rt] >> immediate;
+			}else{	// J
+				printf("# J\n");
+				target = instruction & 0x03FFFFFF;
+            	target = target << 2;
+				highBits = 0xF0000000 & CURRENT_STATE.PC;
+				jmpBy = (target | highBits);// - CURRENT_STATE.PC;
+				printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", target, target, jmpBy, jmpBy);
+			}
+			break;
 		
 		case 0x00000003: //SRA,JAL
 			if (left){ // JAL
 				printf("# JAL\n");
 				target = instruction & 0x03FFFFFF;
 				target = target << 2;
-				highBits = 0xF0000000;
+				highBits = 0xF0000000 & CURRENT_STATE.PC;
+				jmpBy = (target | highBits);
 				NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 8;
 			}
 			else{ // SRA
@@ -619,7 +638,7 @@ void handle_instruction()
 
 		case 0x00000004: //BEQ 
 			printf("# BEQ\n");
-			printf("Branch if equal\n");
+			//printf("Branch if equal\n");
 			//Shift left by 2
 			offset = offset << 2;
 			// sign extend (check if most significant bit is a 1)
@@ -643,7 +662,7 @@ void handle_instruction()
 			}
 			break;
 		case 0x00000006: //BLEZ
-			printf("BLEZ\n");
+			printf("# BLEZ\n");
 			offset = offset << 2;
 			if(((offset & 0x00008000)>>15)){
 				offset = offset | 0xFFFF0000;
@@ -659,7 +678,7 @@ void handle_instruction()
 			if(((offset & 0x00008000)>>15)){
 				offset = offset | 0xFFFF0000;
 			}
-			if((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) == 0x0 ){
+			if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) == 0x0 ){
 				jmpBy = offset; // changed
 			}
 			break;
@@ -670,29 +689,23 @@ void handle_instruction()
 			if(((offset & 0x00008000)>>15)){
 				offset = offset | 0xFFFF0000;
 			}
-			if((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) == 0x0 && (CURRENT_STATE.REGS[rs] != 0x00)){
+			if(((CURRENT_STATE.REGS[rs] & 0x80000000)>>31) == 0x0 && (CURRENT_STATE.REGS[rs] != 0x00)){
 				jmpBy = offset; // changed
 			}
 			break;
-		case 0x00000020: //J
-			printf("# J\n");
-			target = instruction & 0x03FFFFFF;
-            		target = target << 2;
-			highBits = 0xF0000000;
-			jmpBy = target;
-			break;
 		case 0x0000000F: // LUI
 		 	printf("# LUI\n");
-		 	NEXT_STATE.REGS[rt] = (immediate << 16) | 0x0000; // the & is just to assure that the lower 16 bits are zeros
+		 	NEXT_STATE.REGS[rt] = (immediate << 16) | 0x0000; // double check
 		 	break;
 		case 0x0000002B: // SW
 			printf("# SW\n");
 			if(((offset & 0x00008000)>>15)){
 				offset = offset | 0xFFFF0000;
 			}
-			value = CURRENT_STATE.REGS[base] + offset;
-			//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
-			mem_write_32(value, CURRENT_STATE.REGS[rt]);
+			location = CURRENT_STATE.REGS[base] + offset;
+			value = CURRENT_STATE.REGS[rt];
+			printf("offset=%d\nbase=%d\nvalue=%x\n[rt]=%x\n", offset, base, location, value);
+			mem_write_32(location, value);
 			break;
 		case 0x00000028: // SB
 			printf("# SB\n");
@@ -711,19 +724,19 @@ void handle_instruction()
 			mem_write_32(value, CURRENT_STATE.REGS[rt] & 0x0000FFFF);
 			break;
 		case 0x00000010: // MFHI
-			printf("MFHI\n");
+			printf("# MFHI\n");
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.HI;
 			break;
 		case 0x00000012: // MFLO
-			printf("MFLO\n");
+			printf("# MFLO\n");
 			NEXT_STATE.REGS[rd] = CURRENT_STATE.LO;
 			break;
 		case 0x00000011: // MTHI
-			printf("MTHI\n");
+			printf("# MTHI\n");
 			NEXT_STATE.HI = CURRENT_STATE.REGS[rs];
 			break;
 		case 0x00000013: // MTLO
-			printf("MTLO\n");
+			printf("# MTLO\n");
 			NEXT_STATE.LO = CURRENT_STATE.REGS[rs];
 			break;
 
@@ -732,8 +745,10 @@ void handle_instruction()
 			break;
 
 	}
+	
 	NEXT_STATE.PC = (CURRENT_STATE.PC & highBits) + jmpBy; // jmpBy is 4 by default
 	prevIns = opc;	// used in MULT, MULTU, DIV, and DIVU	
+	jmpBy = 4;
 }
 
 
