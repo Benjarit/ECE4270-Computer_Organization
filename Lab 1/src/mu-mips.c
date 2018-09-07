@@ -614,7 +614,7 @@ void handle_instruction()
 				offset = jmpBy - CURRENT_STATE.PC;
 				jmpBy = offset;
 					
-				printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", target, target, jmpBy, jmpBy);
+				printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", CURRENT_STATE.PC, CURRENT_STATE.PC, jmpBy, jmpBy);
 			}
 			break;
 		
@@ -756,9 +756,9 @@ void handle_instruction()
 
 	}
 	
-	NEXT_STATE.PC = CURRENT_STATE.PC + jmpBy; // jmpBy is 4 by default
+	NEXT_STATE.PC = (CURRENT_STATE.PC /*& highBits*/) + jmpBy; // jmpBy is 4 by default
 	prevIns = opc;	// used in MULT, MULTU, DIV, and DIVU	
-	jmpBy = 4;
+	//jmpBy = 4;
 }
 
 
