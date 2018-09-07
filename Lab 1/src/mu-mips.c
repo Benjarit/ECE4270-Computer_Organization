@@ -609,6 +609,11 @@ void handle_instruction()
             	target = target << 2;
 				highBits = 0xF0000000 & CURRENT_STATE.PC;
 				jmpBy = (target | highBits);// - CURRENT_STATE.PC;
+				
+				// try to find the offset, so that we can jump to that address
+				offset = jmpBy - CURRENT_STATE.PC;
+				jmpBy = offset;
+					
 				printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", target, target, jmpBy, jmpBy);
 			}
 			break;
@@ -620,6 +625,11 @@ void handle_instruction()
 				target = target << 2;
 				highBits = 0xF0000000 & CURRENT_STATE.PC;
 				jmpBy = (target | highBits);
+				
+				// try to find the offset, so that we can jump to that address
+				offset = jmpBy - CURRENT_STATE.PC;
+				jmpBy = offset;
+				
 				NEXT_STATE.REGS[31] = CURRENT_STATE.PC + 8;
 			}
 			else{ // SRA
