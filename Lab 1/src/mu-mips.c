@@ -746,7 +746,7 @@ void handle_instruction()
 
 	}
 	
-	NEXT_STATE.PC = (CURRENT_STATE.PC & highBits) + jmpBy; // jmpBy is 4 by default
+	NEXT_STATE.PC = CURRENT_STATE.PC + jmpBy; // jmpBy is 4 by default
 	prevIns = opc;	// used in MULT, MULTU, DIV, and DIVU	
 	jmpBy = 4;
 }
