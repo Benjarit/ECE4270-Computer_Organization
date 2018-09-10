@@ -226,7 +226,7 @@ void handle_command() {
 			CURRENT_STATE.LO = lo_reg_value;
 			NEXT_STATE.LO = lo_reg_value;
 			break;
-		case 'P':https://www.google.com/search?client=ubuntu&channel=fs&q=c+convert+32+bit+hex&ie=utf-8&oe=utf-8
+		case 'P':
 		case 'p':
 			print_program(); 
 			break;
@@ -770,6 +770,7 @@ void initialize() {
 	CURRENT_STATE.PC = MEM_TEXT_BEGIN;
 	NEXT_STATE = CURRENT_STATE;
 	RUN_FLAG = TRUE;
+	
 }
 
 /************************************************************/
@@ -784,13 +785,179 @@ void print_program(){
 		printf("[0x%x]\t", addr);
 		print_instruction(addr);
 	}
+	
 }
 
 /************************************************************/
 /* Print the instruction at given memory address (in MIPS assembly format)    */
 /************************************************************/
 void print_instruction(uint32_t addr){
-	/*IMPLEMENT THIS*/
+    char buffer[50];
+    uint32_t instruction = mem_read_32(addr);
+	
+    //-----R-Type Instruction variables-----
+	uint32_t func = instruction & 0x0000003F;			//bits 0-5
+	uint32_t shamt = (instruction & 0x00000780) >> 6;	//bits 6-10
+	uint32_t d_reg = (instruction & 0x0000F800) >> 11;	//bits 11-15
+	uint32_t t_reg = (instruction & 0x001F0000) >> 16;	//bits 16-20
+	uint32_t s_reg = (instruction & 0x03E00000) >> 21;	//bits 21-25
+	uint32_t special = (instruction & 0xFC000000);		//bits 26-31
+	
+	//------I-Type Instruction variables-----
+	uint32_t immediate = instruction & 0x0000FFFF;		//bits 0-15
+	
+	//-----J-Type Instruction variables-----
+	uint32_t branch = instruction & 0x001F0000;			//bits 16-20
+	
+	buffer[0] = '\0';
+	
+    NEXT_STATE.PC = CURRENT_STATE.PC + 4;
+	
+    switch(special) {
+        case 0x00000000:	                          //non-special
+            switch(func) {
+                case 0x00000020:                      //ADD
+                   sprintf(buffer, "ADD $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x00000021:                      //ADDU
+                    sprintf(buffer, "ADDU $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+				case 0x00000024:                      //AND
+                    sprintf(buffer, "ADD $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+				case 0x0000001A:                      //DIV
+                    sprintf(buffer, "DIV $%d, $%d\n", s_reg, t_reg);
+                    break;
+				case 0x0000001B:                      //DIVU
+                    sprintf(buffer, "DIVU $%d, $%d\n", s_reg, t_reg);
+                    break;
+				case 0x00000008:                      //JR
+                    sprintf(buffer, "JR $%d\n", s_reg);
+                    break;	
+                case 0x00000022:                      //SUB
+                    sprintf(buffer, "SUB $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x00000023:                      //SUBU
+                    sprintf(buffer, "SUBU $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x00000018:                      //MULT
+                    sprintf(buffer, "MULT $%d, $%d\n", s_reg, t_reg);
+                    break;
+                case 0x00000019:                      //MULTU
+                    sprintf(buffer, "MULT $%d, $%d\n", s_reg, t_reg);
+                    break;
+				case 0x00000011:                      //MTHI
+                    sprintf(buffer, "MTHI $%d\n", s_reg);
+                    break;
+				case 0x00000013:                      //MTLO
+                    sprintf(buffer, "MTLO $%d\n", s_reg);
+                    break;
+                case 0x00000025:                      //OR
+                    sprintf(buffer, "OR $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x00000026:                      //XOR
+                    sprintf(buffer, "XOR $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x00000027:                      //NOR
+                    sprintf(buffer, "NOR $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x0000002A:                      //SLT
+                    sprintf(buffer, "SLT $%d, $%d, $%d\n", d_reg, s_reg, t_reg);
+                    break;
+                case 0x00000000:                      //SLL
+                    sprintf(buffer, "SLL $%d, $%d, $%d\n", d_reg, t_reg, shamt);
+                    break;
+                case 0x00000002:                      //SRL
+                    sprintf(buffer, "SRL $%d, $%d, $%d\n", d_reg, t_reg, shamt);
+                    break;
+                case 0x00000003:                      //SRA
+                    sprintf(buffer, "SRA $%d, $%d, $%d\n", d_reg, t_reg, shamt);
+                    break;
+                case 0x00000010:                      //MFHI
+                    sprintf(buffer, "MFHI $%d\n", d_reg);
+                    break;
+                case 0x00000012:                      //MFLO
+                    sprintf(buffer, "MFLO $%d\n", d_reg);
+                    break;
+                
+                case 0x00000009:                      //JALR
+                    sprintf(buffer, "JALR $%d, $%d\n", d_reg, s_reg);
+                    break;
+                case 0x0000000C:                      //SYSCALL
+                    sprintf(buffer, "SYSCALL\n");
+                    break;
+            }
+            break;
+        case 0x04000000:								//REGIMM
+            switch(branch) {
+				case 0x00010000:                      //BGEZ
+                    sprintf(buffer, "BLEZ $%d, %d\n", s_reg, immediate);
+                    break;
+                case 0x00000000:                      //BLTZ
+                    sprintf(buffer, "BLTZ $%d, %d\n", s_reg, immediate);
+                    break;
+            }
+														//special
+        case 0x20000000:								//ADDI
+            sprintf(buffer, "ADDI $%d, $%d, %d\n", t_reg, s_reg, immediate);
+            break;
+        case 0x24000000:								//ADDIU
+            sprintf(buffer, "ADDIU $%d, $%d, %d\n", t_reg, s_reg, immediate);
+            break;
+        case 0x30000000:								//ANDI
+            sprintf(buffer, "ANDI $%d, $%d, %d\n", t_reg, s_reg, immediate);
+            break;
+		case 0x10000000:								//BEQ
+            sprintf(buffer, "BEQ $%d, $%d, %d\n", s_reg, t_reg, immediate);
+            break;
+		case 0x14000000:								//BNE
+            sprintf(buffer, "BNE $%d, $%d, %d\n", s_reg, t_reg, immediate);
+            break;
+		case 0x08000000:								//J
+             sprintf(buffer, "J %zu\n", (size_t)(instruction && 0x03FFFFFF) << 2);
+            break;
+		case 0x0C000000:								//JAL
+            sprintf(buffer, "JAL %zu\n", (size_t)(instruction && 0x03FFFFFF) << 2);
+            break;
+		case 0x3C000000:								//LUI
+            sprintf(buffer, "LUI $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+		case 0x8C000000:								//LW
+            sprintf(buffer, "LW $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+		case 0x80000000:								//LB
+            sprintf(buffer, "LB $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+        case 0x34000000:								//ORI
+            sprintf(buffer, "ORI $%d, $%d, %d\n", t_reg, s_reg, immediate);
+            break;
+        case 0x38000000:								//XORI
+            sprintf(buffer, "XORI $%d, $%d, %d\n", t_reg, s_reg, immediate);
+            break;
+        case 0x28000000:								//SLTI
+            sprintf(buffer, "SLTI $%d, $%d, %d\n", t_reg, s_reg, immediate);
+            break;
+        case 0x84000000:								//LH
+            sprintf(buffer, "LH $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+        case 0xAC000000:								//SW
+            sprintf(buffer, "SW $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+        case 0xA0000000:								//SB
+            sprintf(buffer, "SB $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+        case 0xA4000000:								//SH
+            sprintf(buffer, "SH $%d, %d($%d)\n", t_reg, immediate, s_reg);
+            break;
+        case 0x18000000:								//BLEZ
+            sprintf(buffer, "BLEZ $%d, %d\n", s_reg, immediate);
+            break;
+        case 0x1c000000:								//BGTZ
+           sprintf(buffer, "BGTZ $%d, %d\n", s_reg, immediate);
+            break;
+    }
+	
+    printf("%s", buffer);
 }
 
 /***************************************************************/
