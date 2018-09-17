@@ -10,18 +10,31 @@ main:
 	la $t1, Output
 	li $t2, 0      # x = 0;
 	li $t3, 0      # y = 0;
-	li $s1, 10   # size of array = 10
+	li $s1, 9   # size of array = 10
 loop1:	
+	addiu $t2, $t2, 1  # x++;
+	beq $t2,$s1, exit
+	
+	li $t3, 0 # i = 0;
 	loop2:
+		bge $t2, $s1, exitForLoop   # if i>=s2, exit
 	
-	
-		lw $s2, 0($t0)
-	
+		lw $s2, 0($t0)   # first number in array
+		lw $s3, 4($t0)   # second number in array
+		
+		ble  $s2, $s3, update
+		
+		sw $s3, 0($t0)
+		sw $s2, 4($t0)
+		
+		update: 
+		addiu $t3, $t3, 1
+		sll $t4, $t3, 2 
+		addu $t0, $t0, $t4
 		j loop2
-		
-	addu $t0, $t0, 4	
-		
 	loop2End:
 		j loop1
 
+end_program:
+	
 	
