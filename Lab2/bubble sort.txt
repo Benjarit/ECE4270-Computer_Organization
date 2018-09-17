@@ -1,0 +1,18 @@
+
+
+.data
+	Input: .word 5, 3, 6, 8, 9, 1, 4, 7, 2, 10
+	Output: .word 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+# Load address of Input and Output
+main:
+	la $t0, Input
+	la $t1, Output
+
+
+	lw   $s2, 0($t0)
+	
+
+
+
+	addu $t0, $t0, 4
