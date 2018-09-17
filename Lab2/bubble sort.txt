@@ -8,11 +8,20 @@
 main:
 	la $t0, Input
 	la $t1, Output
-
-
-	lw   $s2, 0($t0)
+	li $t2, 0      # x = 0;
+	li $t3, 0      # y = 0;
+	li $s1, 10   # size of array = 10
+loop1:	
+	loop2:
 	
+	
+		lw $s2, 0($t0)
+	
+		j loop2
+		
+	addu $t0, $t0, 4	
+		
+	loop2End:
+		j loop1
 
-
-
-	addu $t0, $t0, 4
+	
