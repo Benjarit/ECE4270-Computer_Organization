@@ -1,41 +1,31 @@
-
-
 .data
 	Input: .word 5, 3, 6, 8, 9, 1, 4, 7, 2, 10
-	Output: .word 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 # Load address of Input and Output
 main:
-	la $t0, Input
-	la $t1, Output
+	la $t0, Input  # Load address to $t0
 	li $t2, 0      # x = 0;
 	li $t3, 0      # y = 0;
 	li $s1, 9   # counter set to 9 since the size of array = 10
-loop1:	
-
-	li $t6, 1
-	subu $s1, $s1, $t6 # size = size -1
-	subu $s4, $s1, $t2  # s2 = length - x
+loop1:
 	loop2:
-		
+	
 		lw $s2, 0($t0)   # first number in array
 		lw $s3, 4($t0)   # second number in array
-		
-		ble  $s2, $s3, update
-		
+		ble $s2, $s3, update
 		sw $s3, 0($t0)
 		sw $s2, 4($t0)
 		
 		update: 
-		sll $t4, $t3, 2 
-		addu $t0, $t0, $t4
-		
 		addiu $t3, $t3, 1  #y++;
+		sll $t1, $t3, 4
+		addu $t0, $t0, $t1 # increment pointer 
+		
+		subu $s4, $s1, $t2  # s2 = length - x
 		beq $t3,$s4, loop2End
 		j loop2
 	loop2End:
 		addiu $t2, $t2, 1  # x++;
-		beq $t2,$s1, exit
+		beq $t2,$s1, end_program
 		j loop1
-
 end_program:
