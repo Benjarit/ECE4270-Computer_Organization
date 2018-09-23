@@ -535,9 +535,9 @@ void handle_instruction()
 
 			// SYSCALL
 			}else{ 
-				if(CURRENT_STATE.REGS[2] = 0xA){ // check register $v0 = $2 for the value 10
+				//if(CURRENT_STATE.REGS[2] = 0xA){ // check register $v0 = $2 for the value 10
 					RUN_FLAG = false;
-				}
+				//}
 			}
 
 			break;
@@ -639,7 +639,7 @@ void handle_instruction()
 				offset = jmpBy - CURRENT_STATE.PC;
 				jmpBy = offset;
 					
-				printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", CURRENT_STATE.PC, CURRENT_STATE.PC, jmpBy, jmpBy);
+				//printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", CURRENT_STATE.PC, CURRENT_STATE.PC, jmpBy, jmpBy);
 			}
 			break;
 		
@@ -840,7 +840,6 @@ void print_program(){
 	
 }
 char * getReg(int temp){
-	char reg[6];
 	if(temp == 0){
 		return "$zero";
 	}else if(temp == 1){
@@ -923,7 +922,7 @@ char * getReg(int temp){
 	else if(temp == 27){
 		return "$k1";
 	}
-
+	return NULL;
 }
 
 /************************************************************/

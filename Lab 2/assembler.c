@@ -93,7 +93,7 @@ int getReg(char *temp){
 		return 27;
 	}
 	else{
-		return NULL;
+		return -100;
 	}
 }
 
@@ -228,14 +228,13 @@ int opToInt(char *temp){
 		return 9;
 	}
 	else{
-		return NULL;
+		return -100;
 	}
 }
 
 // can be used for an immediate value (immediate or offset)
 // takes the value (either 0xA or -8 or whatever) as a character array and converts it to an integer
 int getImm(char *temp){
-	char *hold1, *hold2;
 	if(temp[1] == 'x'){ 					// for the form 0xA
 		return (int)strtol(temp, NULL, 0);	// this takes a char array of the form 0x**** and converts it
 	}else if(temp[1] != 'x'){				// for an actual value like 9 or -8
@@ -247,9 +246,8 @@ int getImm(char *temp){
 void assemble(char *name){
 		FILE * fp;
 		FILE * fout;
-		int i, word, type;
 		char instr[1000], hold[1000], fileOutName[32];
-		char *op, *rs, *rt, *rd, *imm, *del, *off, *base, *sa, *target;
+		char *op, *rs, *rt, *rd, *imm, *off, *base, *sa, *target;
 		uint32_t ins;
 		fp = fopen(name, "r");
 		sprintf(fileOutName,"assembled_%s",name);
@@ -260,7 +258,6 @@ void assemble(char *name){
 		sprintf(fileOutName,"assembled_%s",name);
 		fout = fopen(fileOutName,"w");
 
-		i = 0;
 		// for every instruction in the file
 		while(fgets(instr, sizeof(instr), fp) != NULL){
 			strncpy(hold, instr, 1000);
@@ -660,7 +657,7 @@ void assemble(char *name){
 				ins = ins | (getReg(rs) << 21);
 				ins = ins | ((opToInt(op) & 0x1f) << 16);
 				// convert the immediate (offset) character array to an integer and shift into place
-				ins = ins | (getImm(off) & 0xffff);
+				ins = ins | ((getImm(off) & 0xffff) >> 2);
 			}
 			// DOUBLE CHECK
 			else if(strcmp(op, "bgez") == 0){
@@ -716,7 +713,7 @@ void assemble(char *name){
 			else{
 				ins = ins | 12;
 			}
-			printf("%x\n",ins);
+			//printf("%x\n",ins);
 			fprintf(fout,"%x\n",ins);
 		}
 		fclose(fp);
@@ -729,6 +726,9 @@ int main(int argc, char *argv[]) {
 			printf("Error: You should provide input file.\nUsage: %s <input program> \n\n",  argv[0]);
 			exit(1);
 		}
+		printf("[#] Assembling -> assembled_%s\n",argv[1]);
 		assemble(argv[1]);
+		printf("[#] Done.\n[#] To simulate, run: ./mu-mips assembled_%s\n",argv[1]);
+
 }
 	
