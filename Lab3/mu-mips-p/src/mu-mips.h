@@ -50,9 +50,15 @@ typedef struct CPU_Pipeline_Reg_Struct{
 	uint32_t IR;
 	uint32_t A;
 	uint32_t B;
+	uint32_t C;
+	uint32_t opcode;
 	uint32_t imm;
 	uint32_t ALUOutput;
 	uint32_t LMD;
+	uint32_t HI;
+	uint32_t LO;
+	bool left;
+	bool right;
 	
 } CPU_Pipeline_Reg;
 
@@ -70,8 +76,8 @@ uint32_t PROGRAM_SIZE; /*in words*/
 /***************************************************************/
 /* Pipeline Registers.                                                                                                        */
 /***************************************************************/
-CPU_Pipeline_Reg ID_IF;
-CPU_Pipeline_Reg IF_EX;
+CPU_Pipeline_Reg IF_ID;
+CPU_Pipeline_Reg ID_EX;
 CPU_Pipeline_Reg EX_MEM;
 CPU_Pipeline_Reg MEM_WB;
 
