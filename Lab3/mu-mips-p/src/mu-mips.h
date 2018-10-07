@@ -51,12 +51,17 @@ typedef struct CPU_Pipeline_Reg_Struct{
 	uint32_t A;
 	uint32_t B;
 	uint32_t C;
+	uint32_t RS;
+	uint32_t RT;
+	uint32_t RD;
 	uint32_t opcode;
 	uint32_t imm;
 	uint32_t ALUOutput;
 	uint32_t LMD;
 	uint32_t HI;
 	uint32_t LO;
+	uint32_t prevIns;
+	uint32_t type;
 	bool left;
 	bool right;
 	
@@ -108,4 +113,5 @@ void IF();/*IMPLEMENT THIS*/
 void show_pipeline();/*IMPLEMENT THIS*/
 void initialize();
 void print_program(); /*IMPLEMENT THIS*/
+void print_instruction(uint32_t);
 
