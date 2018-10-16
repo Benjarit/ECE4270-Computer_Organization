@@ -66,6 +66,15 @@ typedef struct CPU_Pipeline_Reg_Struct{
 	bool right;
 	int ForwardA;
 	int ForwardB;
+	bool RegWrite;
+	bool ALUSrc;
+	bool RegDst;
+	bool ALUOp;
+	bool branch_zero;
+	bool MemRead;
+	bool MemToReg;
+	int ex_stall;
+	int mem_stall;
 	
 } CPU_Pipeline_Reg;
 

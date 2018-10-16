@@ -7,7 +7,8 @@
 
 #include "mu-mips.h"
 
-bool stall_f = false;
+int ex_stall = 0;
+int mem_stall = 0;
 /***************************************************************/
 /* Print out a list of commands available                                                                  */
 /***************************************************************/
@@ -328,6 +329,7 @@ void handle_pipeline()
 /************************************************************/
 void WB() //MEM_WB
 {
+	if((MEM_WB.ex_stall ==  0) && (MEM_WB.mem_stall == 0)){
 	switch(MEM_WB.type){
 		case 0: // R
 			//print_instruction(MEM_WB.IR);
@@ -345,13 +347,13 @@ void WB() //MEM_WB
 			break;
 		case 100:
 			// "Skip case"
-			break;
+			break;//struction in the IF stage
 	}
 	NEXT_STATE.HI = MEM_WB.HI;
 	NEXT_STATE.LO = MEM_WB.LO;
 	INSTRUCTION_COUNT++;
-	stall_f = false;
-	
+	}
+
 	
 }
 
@@ -360,6 +362,7 @@ void WB() //MEM_WB
 /************************************************************/
 void MEM() // EX_MEM > MEM_WB
 {
+	if((EX_MEM.ex_stall ==  0) && (EX_MEM.mem_stall == 0)){
 	switch(EX_MEM.opcode){
 		case 0x00000020:
 			// LB
@@ -390,7 +393,7 @@ void MEM() // EX_MEM > MEM_WB
 			mem_write_32(EX_MEM.ALUOutput, EX_MEM.B);
 			break;
 		case 0x00000028:
-			// SB
+			// SBID_EX.RD = 0;
 			printf("# SB\n");
 			//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
 			mem_write_32(EX_MEM.ALUOutput, EX_MEM.B & 0x000000FF);
@@ -413,6 +416,12 @@ void MEM() // EX_MEM > MEM_WB
 	MEM_WB.RS = EX_MEM.RS;
 	MEM_WB.RT = EX_MEM.RT;
 	MEM_WB.RD = EX_MEM.RD;
+	MEM_WB.RegWrite = EX_MEM.RegWrite;
+	}else{
+		MEM_WB.ex_stall = EX_MEM.ex_stall;
+		MEM_WB.mem_stall = EX_MEM.mem_stall;
+			
+	}
 
 }
 
@@ -421,6 +430,7 @@ void MEM() // EX_MEM > MEM_WB
 /************************************************************/
 void EX() //ID_EX > EX_MEM
 {
+	if((ID_EX.ex_stall ==  0) && (ID_EX.mem_stall == 0)){
 	uint32_t value, temp;
 	//printf("OPCODE=%x\n", ID_EX.opcode);
 	//print_instruction(ID_EX.IR);
@@ -587,6 +597,7 @@ void EX() //ID_EX > EX_MEM
 			// SYSCALL
 			}else{ 
 				//if(CURRENT_STATE.REGS[2] = 0xA){ // check register $v0 = $2 for the value 10
+					
 					RUN_FLAG = false;
 				//}
 			}
@@ -751,13 +762,19 @@ void EX() //ID_EX > EX_MEM
 			break;
 
 	}
+	if(ID_EX.type != 100){
+		ID_EX.RegWrite = true;
+	}else{
+		ID_EX.RegWrite = false;
+	}
 	//printf("ALUOutput=%x\n",ID_EX.ALUOutput);
 	EX_MEM.IR = ID_EX.IR;
 	EX_MEM.opcode = ID_EX.opcode;
 	EX_MEM.type = ID_EX.type;
 	EX_MEM.ALUOutput = ID_EX.ALUOutput;
 	EX_MEM.HI = ID_EX.HI;
-	EX_MEM.LO = ID_EX.LO;
+	EX_MEM.LO = ID_EX.LO;EX_MEM.ex_stall = ID_EX.ex_stall;
+		EX_MEM.mem_stall = ID_EX.mem_stall;
 	EX_MEM.left = ID_EX.left;
 	EX_MEM.right = ID_EX.right;
 	EX_MEM.RS = ID_EX.RS;
@@ -766,6 +783,12 @@ void EX() //ID_EX > EX_MEM
 	EX_MEM.A = ID_EX.A;
 	EX_MEM.B = ID_EX.B;
 	EX_MEM.C = ID_EX.C;
+	EX_MEM.RegWrite = ID_EX.RegWrite;
+	}else{
+		EX_MEM.ex_stall = ID_EX.ex_stall;
+		EX_MEM.mem_stall = ID_EX.mem_stall;
+		EX_MEM.RD=0;
+	}
 
 
 }
@@ -775,34 +798,7 @@ void EX() //ID_EX > EX_MEM
 /************************************************************/
 void ID() // IF_ID > ID_EX
 {
-	if(EX_MEM.type == 0){
-		if(EX_MEM.RegWrite && (EX_MEM.RD != 0x0) && (EX_MEM.RD == ID_EX.RS)){
-			stall_f = true;	
-		}
-		if(EX_MEM.RegWrite && (EX_MEM.RD != 0x0) && (EX_MEM.RD == ID_EX.RT)){
-			stall_f = true;
-		}
-		if(MEM_WB.RegWrite && (MEM_WB.RD != 0x0) && (MEM_WB.RD == ID_EX.RS)){
-			stall_f = true;
-		}
-		if(MEM_WB.RegWrite && (MEM_WB.RD != 0x0) && (MEM_WB.RD == ID_EX.RT)){
-			stall_f = true;
-		}
-	else if((EX_MEM.type == 1) || (EX_MEM.type == 2)){
-		if(EX_MEM.RegWrite && (EX_MEM.RT != 0x0) && (EX_MEM.RT == ID_EX.RS)){
-			stall_f = true;
-		}
-		if(EX_MEM.RegWrite && (EX_MEM.RT != 0x0) && (EX_MEM.RT == ID_EX.RT)){
-			stall_f = true;
-		}
-		if(MEM_WB.RegWrite && (MEM_WB.RT != 0x0) && (MEM_WB.RT == ID_EX.RS)){
-			stall_f = true;
-		}
-		if(MEM_WB.RegWrite && (MEM_WB.RT != 0x0) && (MEM_WB.RT == ID_EX.RT)){
-			stall_f = true;
-		}
-	}
-	if(!stall_f){
+	
 		/*IMPLEMENT THIS*/
 		uint32_t opc;
 		uint32_t instruction = IF_ID.IR;
@@ -839,26 +835,38 @@ void ID() // IF_ID > ID_EX
 		if(((IF_ID.imm & 0x00008000)>>15)){
 			IF_ID.imm = IF_ID.imm | 0xFFFF0000;
 		}
-	
-		//printf("OPCODE=%x\nA=%x\nB=%x\nC=%x\nImm=%x\n",ID_EX.opcode,ID_EX.A, ID_EX.B, ID_EX.C, ID_EX.imm);
-		IF_ID.HI = CURRENT_STATE.HI;
-		IF_ID.LO = CURRENT_STATE.LO;
+		if((IF_ID.ex_stall == 0) && (EX_MEM.RegWrite && (EX_MEM.RD != 0) && ((EX_MEM.RD == IF_ID.RS) || (EX_MEM.RD == IF_ID.RT)))){
+			IF_ID.ex_stall=3;
+			
+		}
+		if((IF_ID.mem_stall == 0) && (MEM_WB.RegWrite && (MEM_WB.RD != 0) && ((MEM_WB.RD == IF_ID.RS) || (MEM_WB.RD == IF_ID.RT)))){
+			IF_ID.mem_stall=2;
+			
+		}
+		if((IF_ID.ex_stall == 0) && (IF_ID.mem_stall == 0)){
+			//printf("OPCODE=%x\nA=%x\nB=%x\nC=%x\nImm=%x\n",ID_EX.opcode,ID_EX.A, ID_EX.B, ID_EX.C, ID_EX.imm);
+			IF_ID.HI = CURRENT_STATE.HI;
+			IF_ID.LO = CURRENT_STATE.LO;
 
-		ID_EX.IR = instruction;
-		ID_EX.opcode = IF_ID.opcode;
-		ID_EX.A = IF_ID.A;
-		ID_EX.B = IF_ID.B;
-		ID_EX.C = IF_ID.C;
-		ID_EX.imm = IF_ID.imm;
-		ID_EX.HI = IF_ID.HI;
-		ID_EX.LO = IF_ID.LO;
-		ID_EX.left = IF_ID.left;
-		ID_EX.right = IF_ID.right;
-		ID_EX.type = 100; // default case
-		ID_EX.RS = IF_ID.RS;
-		ID_EX.RT = IF_ID.RT;
-		ID_EX.RD = IF_ID.RD;
-	}
+			ID_EX.IR = instruction;
+			ID_EX.opcode = IF_ID.opcode;
+			ID_EX.A = IF_ID.A;
+			ID_EX.B = IF_ID.B;
+			ID_EX.C = IF_ID.C;
+			ID_EX.imm = IF_ID.imm;
+			ID_EX.HI = IF_ID.HI;
+			ID_EX.LO = IF_ID.LO;
+			ID_EX.left = IF_ID.left;
+			ID_EX.right = IF_ID.right;
+			ID_EX.type = 100; // default case
+			ID_EX.RS = IF_ID.RS;
+			ID_EX.RT = IF_ID.RT;
+			ID_EX.RD = IF_ID.RD;
+		}else{
+			ID_EX.ex_stall = IF_ID.ex_stall;
+			ID_EX.ex_stall = IF_ID.mem_stall;
+		}
+		
 
 }
 
@@ -868,11 +876,19 @@ void ID() // IF_ID > ID_EX
 void IF() // IF_ID
 {
 	/*IMPLEMENT THIS*/
-	if(!stall_f){
+	if((ID_EX.ex_stall == 0) && (ID_EX.mem_stall == 0)){
 		IF_ID.IR = mem_read_32(CURRENT_STATE.PC);
 		//printf("IR=%x\n",IF_ID.IR);
 		NEXT_STATE.PC = CURRENT_STATE.PC + 4;
 	}
+	printf("Before:\nex_stall: %d\nmem_stall: %d\n",ID_EX.ex_stall, ID_EX.mem_stall);
+	if(ID_EX.ex_stall != 0){
+		ID_EX.ex_stall--;
+	}
+	if(mem_stall != 0){
+		ID_EX.mem_stall--;
+	}
+	printf("After:\nex_stall: %d\nmem_stall: %d\n",ID_EX.ex_stall, ID_EX.mem_stall);
 
 }
 
