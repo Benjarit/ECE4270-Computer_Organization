@@ -7,11 +7,11 @@
 
 #include "mu-mips.h"
 
-uint32_t ins_hold = 0;
-int stall = 0;
-int stall2 = 0;
+uint32_t ins_hold = 0x0;
 bool end_p = false;
 int c = 0;
+
+int ENABLE_FORWARDING = 0; // forwarding is off by default
 
 
 char * getReg(int temp){
@@ -329,6 +329,13 @@ void handle_command() {
 		case 'p':
 			print_program(); 
 			break;
+		case 'f':
+		case 'F':
+			if(scanf("%d",&ENABLE_FORWARDING)!=1){
+				break;
+			}
+			ENABLE_FORWARDING == 0 ? printf("Forwarding OFF\n") : printf("Forwarding ON\n");
+			break;
 		default:
 			printf("Invalid Command.\n");
 			break;
@@ -424,7 +431,7 @@ void handle_pipeline()
 /************************************************************/
 void WB() //MEM_WB
 {
-	if(MEM_WB.wb == 1){
+	if((MEM_WB.wb == 1) | (ENABLE_FORWARDING == 1)){
 		switch(MEM_WB.type){
 			case 0: // R
 				//print_instruction(MEM_WB.IR);
@@ -457,7 +464,6 @@ void WB() //MEM_WB
 		}
 	}
 	INSTRUCTION_COUNT++;
-	NEXT_STATE = CURRENT_STATE;
 }
 
 /************************************************************/
@@ -465,7 +471,7 @@ void WB() //MEM_WB
 /************************************************************/
 void MEM() // EX_MEM > MEM_WB
 {
-	if(EX_MEM.m == 1){
+	if((EX_MEM.m == 1) | (ENABLE_FORWARDING == 1)){
 		switch(EX_MEM.opcode){
 			case 0x00000020:
 				// LB
@@ -518,7 +524,7 @@ void MEM() // EX_MEM > MEM_WB
 		MEM_WB.RS = EX_MEM.RS;
 		MEM_WB.RT = EX_MEM.RT;
 		MEM_WB.RD = EX_MEM.RD;
-		MEM_WB.stall = EX_MEM.stall;
+		
 	}
 	MEM_WB.wb = EX_MEM.wb;
 
@@ -529,7 +535,7 @@ void MEM() // EX_MEM > MEM_WB
 /************************************************************/
 void EX() //ID_EX > EX_MEM
 {
-	if(ID_EX.ex == 1){
+	if((ID_EX.ex == 1) | (ENABLE_FORWARDING == 1)){
 		uint32_t value, temp;
 		//printf("OPCODE=%x\n", ID_EX.opcode);
 		//print_instruction(ID_EX.IR);
@@ -893,7 +899,7 @@ void EX() //ID_EX > EX_MEM
 /************************************************************/
 void ID() // IF_ID > ID_EX
 {
-	if(IF_ID.id == 1){
+	if((IF_ID.id == 1) | (ENABLE_FORWARDING == 1)){
 		/*IMPLEMENT THIS*/
 		uint32_t opc;
 		uint32_t instruction = IF_ID.IR;
@@ -922,7 +928,7 @@ void ID() // IF_ID > ID_EX
 		IF_ID.A = CURRENT_STATE.REGS[IF_ID.RS]; //rs
 		IF_ID.B = CURRENT_STATE.REGS[IF_ID.RT]; //rt
 		IF_ID.C = CURRENT_STATE.REGS[IF_ID.RD]; //rd
-		printf("RS=%x\nRT=%x\n",IF_ID.A,IF_ID.B);
+		//printf("RS=%x\nRT=%x\n",IF_ID.A,IF_ID.B);
 		//printf("INSTR=%x\n",IF_ID.IR);
 		//printf("RS=%x\n",IF_ID.IR & 0x03E00000);
 		//printf("OPCODE=%x, RS=%x, RT=%x, RD=%x\n",IF_ID.opcode,IF_ID.RS,IF_ID.RT,IF_ID.RD);
@@ -941,78 +947,86 @@ void ID() // IF_ID > ID_EX
 		if((EX_MEM.type == 1) || (EX_MEM.type == 2) || (EX_MEM.type == 3)){
 			//printf("RD=%s\nRT=%s\nRS=%s\n",getReg(EX_MEM.RT),getReg(IF_ID.RT),getReg(IF_ID.RS));
 			if(EX_MEM.RegWrite && (EX_MEM.RT != 0) && (EX_MEM.RT == IF_ID.RS)){
-				printf("STALL=2\n");
+				
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 
 			
 			}
 			else if(EX_MEM.RegWrite && (EX_MEM.RT != 0) && (EX_MEM.RT == IF_ID.RT)){
-				printf("STALL=2\n");
+				
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 			
 			}
 			else if(MEM_WB.RegWrite && (MEM_WB.RT != 0) && (MEM_WB.RT == IF_ID.RS)){
-				printf("STALL=1\n");
+				
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
-				IF_ID.mem = 0;
+				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 		
 			}
 			else if(MEM_WB.RegWrite && (MEM_WB.RT != 0) && (MEM_WB.RT == IF_ID.RT)){
-				printf("STALL=1\n");
+				
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 			}
 		}
 		else{
-			printf("RD=%s\nRT=%s\nRS=%s\n",getReg(EX_MEM.RD),getReg(IF_ID.RT),getReg(IF_ID.RS));
+			//printf("RD=%s\nRT=%s\nRS=%s\n",getReg(EX_MEM.RD),getReg(IF_ID.RT),getReg(IF_ID.RS));
 			if(EX_MEM.RegWrite && (EX_MEM.RD != 0) && (EX_MEM.RD == IF_ID.RS)){
-				printf("STALL=2\n");
+				
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 			
 			}
 			else if(EX_MEM.RegWrite && (EX_MEM.RD != 0) && (EX_MEM.RD == IF_ID.RT)){
-				printf("STALL=2\n");
+			
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 			
 			}
 			else if(MEM_WB.RegWrite && (MEM_WB.RD != 0) && (MEM_WB.RD == IF_ID.RS)){
-				printf("STALL=1\n");
+			
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 		
 			}
 			else if(MEM_WB.RegWrite && (MEM_WB.RD != 0) && (MEM_WB.RD == IF_ID.RT)){
-				printf("STALL=1\n");
+			
 				IF_ID.ex = 0;
 				IF_ID.id = 0;
 				IF_ID.i = 0;
 				IF_ID.m = 0;
 				IF_ID.wb = 0;
+				printf("! STALL\n");
 			}
 		}
 		ins_hold = ID_EX.IR;
@@ -1034,7 +1048,6 @@ void ID() // IF_ID > ID_EX
 		ID_EX.RS = IF_ID.RS;
 		ID_EX.RT = IF_ID.RT;
 		ID_EX.RD = IF_ID.RD;
-		ID_EX.stall = IF_ID.stall;
 
 	}else{
 		IF_ID.ex = 0;
@@ -1058,13 +1071,16 @@ void ID() // IF_ID > ID_EX
 void IF() // IF_ID
 {
 
-	if(IF_ID.i == 1){
+	if((IF_ID.i == 1) | (ENABLE_FORWARDING == 1)){ // set to a 1 in main()
 		IF_ID.id = 1;
 		/*IMPLEMENT THIS*/
 		IF_ID.IR = mem_read_32(CURRENT_STATE.PC);
 		//printf("IR=%x\n",IF_ID.IR);
 		CURRENT_STATE.PC = CURRENT_STATE.PC + 4;
 	}
+
+	// stalling causes program to end a cycle short, so this forces
+	// one more cycle at the end of the program for completion
 	if(end_p){
 		if(c == 1){
 			RUN_FLAG = false;
