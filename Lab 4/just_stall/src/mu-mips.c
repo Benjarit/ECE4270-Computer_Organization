@@ -10,8 +10,10 @@
 uint32_t ins_hold = 0x0;
 bool end_p = false;
 int c = 0;
+int forward=0;
 
 int ENABLE_FORWARDING = 0; // forwarding is off by default
+bool same = false;
 
 
 char * getReg(int temp){
@@ -431,7 +433,7 @@ void handle_pipeline()
 /************************************************************/
 void WB() //MEM_WB
 {
-	if((MEM_WB.wb == 1) | (ENABLE_FORWARDING == 1)){
+	if(MEM_WB.wb == 1){
 		switch(MEM_WB.type){
 			case 0: // R
 				//print_instruction(MEM_WB.IR);
@@ -459,6 +461,8 @@ void WB() //MEM_WB
 			EX_MEM.RT = 300;
 			EX_MEM.RD = 300;
 			EX_MEM.RS = 300;
+			MEM_WB.RegWrite = 0;
+
 			//CURRENT_STATE.PC = CURRENT_STATE.PC-4;
 
 		}
@@ -471,7 +475,7 @@ void WB() //MEM_WB
 /************************************************************/
 void MEM() // EX_MEM > MEM_WB
 {
-	if((EX_MEM.m == 1) | (ENABLE_FORWARDING == 1)){
+	if(EX_MEM.m == 1){
 		switch(EX_MEM.opcode){
 			case 0x00000020:
 				// LB
@@ -524,6 +528,7 @@ void MEM() // EX_MEM > MEM_WB
 		MEM_WB.RS = EX_MEM.RS;
 		MEM_WB.RT = EX_MEM.RT;
 		MEM_WB.RD = EX_MEM.RD;
+		MEM_WB.RegWrite = EX_MEM.RegWrite;
 		
 	}
 	MEM_WB.wb = EX_MEM.wb;
@@ -535,12 +540,25 @@ void MEM() // EX_MEM > MEM_WB
 /************************************************************/
 void EX() //ID_EX > EX_MEM
 {
-	if((ID_EX.ex == 1) | (ENABLE_FORWARDING == 1)){
+	if(ID_EX.ex == 1){
+		
 		uint32_t value, temp;
-		//printf("OPCODE=%x\n", ID_EX.opcode);
-		//print_instruction(ID_EX.IR);
-		//printf("RS(A)=%x\tRT(B)=%x\tRD(C)=%x\timm=%x\n",ID_EX.A,ID_EX.B,ID_EX.C,ID_EX.imm);
-		//printf("RS=%d\tRT=%d\tRD=%d\n",ID_EX.IR & 0x03E00000 >> 21,ID_EX.IR & 0x001F0000 >> 16,ID_EX.IR & 0x0000FC00 >> 11);
+
+		// if forwarding is enabled, the variable forward tells us which 
+		// which register to forward the result into
+		// 1 = RS = A
+		// 2 = RT = B
+		if(ENABLE_FORWARDING){
+			switch(forward){
+				case 1:
+					ID_EX.A = EX_MEM.ALUOutput;
+					break;
+				case 2:
+					ID_EX.B = EX_MEM.ALUOutput;
+					break;
+			}
+		}
+
 		switch(ID_EX.opcode){
 			case 0x00000020: 
 				// ADD
@@ -549,8 +567,7 @@ void EX() //ID_EX > EX_MEM
 					ID_EX.ALUOutput = ID_EX.A + ID_EX.B;
 					//printf("ADD result = %x\n",ID_EX.ALUOutput);
 					ID_EX.type = 0;
-					//printf("\tBefore:\n\trs=%d\t0x%x\n\trt=%d\t0x%x\n\trd=%d\n", rs, ID_EX.A, rt, ID_EX.B, rd);
-					//printf("\tAfter:\n\t[rd]=0x%x\n", NEXT_STATE.REGS[rd]);
+					
 
 				// LB	
 				}else if(ID_EX.left){
@@ -899,7 +916,7 @@ void EX() //ID_EX > EX_MEM
 /************************************************************/
 void ID() // IF_ID > ID_EX
 {
-	if((IF_ID.id == 1) | (ENABLE_FORWARDING == 1)){
+	if(IF_ID.id == 1){
 		/*IMPLEMENT THIS*/
 		uint32_t opc;
 		uint32_t instruction = IF_ID.IR;
@@ -943,93 +960,166 @@ void ID() // IF_ID > ID_EX
 		IF_ID.i = 1;
 		IF_ID.m = 1;
 		IF_ID.wb = 1;
+		forward = 0;
+		same = false;
+
+		// the outer IF ELSE statements checks to see what type of instruction the previous
+		// instruction (the one in the EX stage at this point) is. The type determines which
+		// register is being written to (RD for R-type and RT for I-type and load). 
+		// So 1=I-type, 2=LOAD, and 0=R-type which is the ELSE part.
+
 
 		if((EX_MEM.type == 1) || (EX_MEM.type == 2) || (EX_MEM.type == 3)){
-			//printf("RD=%s\nRT=%s\nRS=%s\n",getReg(EX_MEM.RT),getReg(IF_ID.RT),getReg(IF_ID.RS));
+			
+			// IF EX.RT == ID.RS HAZARD
 			if(EX_MEM.RegWrite && (EX_MEM.RT != 0) && (EX_MEM.RT == IF_ID.RS)){
-				
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				// if forwarding is enabled
+				if(ENABLE_FORWARDING == 1){
+					// forward tells the EX stage which register is to be forwarded into
+					// 1 = put the result of previous EX into RS
+					// 2 = put the result of previous EX into RT
+					forward = 1;
 
+					// if the hazard is a load-use hazard, a stall must still occur
+					// becuase the loaded values is not ready until the mem stage
+					if(EX_MEM.type == 2){ // 2 = load instruction
+						IF_ID.ex = 0;
+						IF_ID.id = 0;
+						IF_ID.i = 0;
+						IF_ID.m = 0;
+						IF_ID.wb = 0;
+						printf("! STALL\n");
+					}
+				// if forwarding is NOT enabled, must stall
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 			
 			}
+			// IF EX.RT == ID.RT
 			else if(EX_MEM.RegWrite && (EX_MEM.RT != 0) && (EX_MEM.RT == IF_ID.RT)){
-				
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				// if forwarding is enabled
+				if(ENABLE_FORWARDING == 1){
+					// 2 = put result of previous EX stage into RT
+					forward = 2;
+					// if it is a load instruction, must stall
+					if(EX_MEM.type == 2){
+						IF_ID.ex = 0;
+						IF_ID.id = 0;
+						IF_ID.i = 0;
+						IF_ID.m = 0;
+						IF_ID.wb = 0;
+						printf("! STALL\n");
+					}
+				// if no forwarding, must stall
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 			
 			}
+			// hazard from MEM stage
 			else if(MEM_WB.RegWrite && (MEM_WB.RT != 0) && (MEM_WB.RT == IF_ID.RS)){
-				
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				if(ENABLE_FORWARDING == 1){
+					forward = 1; // put into RS
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 		
 			}
+			// hazard from mem stage
 			else if(MEM_WB.RegWrite && (MEM_WB.RT != 0) && (MEM_WB.RT == IF_ID.RT)){
 				
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				if(ENABLE_FORWARDING == 1){
+					forward = 2; // put into RT
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 			}
 		}
+		// instruction in EX stage is R-type so output is register RD
+		// everything else is the same as above minus the load-use hazard
 		else{
 			//printf("RD=%s\nRT=%s\nRS=%s\n",getReg(EX_MEM.RD),getReg(IF_ID.RT),getReg(IF_ID.RS));
 			if(EX_MEM.RegWrite && (EX_MEM.RD != 0) && (EX_MEM.RD == IF_ID.RS)){
 				
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				if(ENABLE_FORWARDING == 1){
+					forward = 1;
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 			
 			}
 			else if(EX_MEM.RegWrite && (EX_MEM.RD != 0) && (EX_MEM.RD == IF_ID.RT)){
 			
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				if(ENABLE_FORWARDING == 1){
+					forward = 2;
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 			
 			}
 			else if(MEM_WB.RegWrite && (MEM_WB.RD != 0) && (MEM_WB.RD == IF_ID.RS)){
 			
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				if(ENABLE_FORWARDING == 1){
+					forward = 1;
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 		
 			}
 			else if(MEM_WB.RegWrite && (MEM_WB.RD != 0) && (MEM_WB.RD == IF_ID.RT)){
 			
-				IF_ID.ex = 0;
-				IF_ID.id = 0;
-				IF_ID.i = 0;
-				IF_ID.m = 0;
-				IF_ID.wb = 0;
-				printf("! STALL\n");
+				if(ENABLE_FORWARDING == 1){
+					forward = 2;
+				}else{
+					IF_ID.ex = 0;
+					IF_ID.id = 0;
+					IF_ID.i = 0;
+					IF_ID.m = 0;
+					IF_ID.wb = 0;
+					printf("! STALL\n");
+				}
 			}
 		}
-		ins_hold = ID_EX.IR;
+		
+		// the ins_hold stores the instruction that the hazard occured on
+		// this is then used in the writeback stage to know when to stop the stalling
+		ins_hold = ID_EX.IR; 
 	//printf("OPCODE=%x\nA=%x\nB=%x\nC=%x\nImm=%x\n",ID_EX.opcode,ID_EX.A, ID_EX.B, ID_EX.C, ID_EX.imm);
 		IF_ID.HI = CURRENT_STATE.HI;
 		IF_ID.LO = CURRENT_STATE.LO;
@@ -1049,12 +1139,6 @@ void ID() // IF_ID > ID_EX
 		ID_EX.RT = IF_ID.RT;
 		ID_EX.RD = IF_ID.RD;
 
-	}else{
-		IF_ID.ex = 0;
-		IF_ID.id = 0;
-		//IF_ID.i = 0;
-		IF_ID.m = 0;
-		IF_ID.wb = 0;
 	}
 	
 	ID_EX.ex = IF_ID.ex;
@@ -1071,7 +1155,7 @@ void ID() // IF_ID > ID_EX
 void IF() // IF_ID
 {
 
-	if((IF_ID.i == 1) | (ENABLE_FORWARDING == 1)){ // set to a 1 in main()
+	if(IF_ID.i == 1){ // set to a 1 in main()
 		IF_ID.id = 1;
 		/*IMPLEMENT THIS*/
 		IF_ID.IR = mem_read_32(CURRENT_STATE.PC);
