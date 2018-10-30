@@ -456,7 +456,7 @@ void WB() //MEM_WB
 		CURRENT_STATE.LO = MEM_WB.LO;
 		
 		
-		if((IF_ID.IR != 0) && (MEM_WB.IR == ins_hold)){
+		if((IF_ID.IR != 0) && (MEM_WB.IR == ins_hold) && !ENABLE_FORWARDING){
 			IF_ID.id = 1;
 			EX_MEM.RT = 300;
 			EX_MEM.RD = 300;
@@ -532,6 +532,14 @@ void MEM() // EX_MEM > MEM_WB
 		
 	}
 	MEM_WB.wb = EX_MEM.wb;
+	// if forwarding is enabled, and a load-use stall occurred, this just stops the stalling
+	if(ENABLE_FORWARDING){
+		IF_ID.id = 1;
+		EX_MEM.RT = 300;
+		EX_MEM.RD = 300;
+		EX_MEM.RS = 300;
+		MEM_WB.RegWrite = 0;
+	}
 
 }
 
@@ -548,6 +556,8 @@ void EX() //ID_EX > EX_MEM
 		// which register to forward the result into
 		// 1 = RS = A
 		// 2 = RT = B
+		// 3 = RS = A after a load-use stall
+		// 4 = RT = B after a load-use stall
 		if(ENABLE_FORWARDING){
 			switch(forward){
 				case 1:
@@ -556,6 +566,11 @@ void EX() //ID_EX > EX_MEM
 				case 2:
 					ID_EX.B = EX_MEM.ALUOutput;
 					break;
+				case 3:
+					ID_EX.A = EX_MEM.LMD;
+					break;
+				case 4:
+					ID_EX.B = EX_MEM.LMD;
 			}
 		}
 
@@ -961,7 +976,6 @@ void ID() // IF_ID > ID_EX
 		IF_ID.m = 1;
 		IF_ID.wb = 1;
 		forward = 0;
-		same = false;
 
 		// the outer IF ELSE statements checks to see what type of instruction the previous
 		// instruction (the one in the EX stage at this point) is. The type determines which
@@ -978,11 +992,14 @@ void ID() // IF_ID > ID_EX
 					// forward tells the EX stage which register is to be forwarded into
 					// 1 = put the result of previous EX into RS
 					// 2 = put the result of previous EX into RT
+					// 3 = put the result of previous MEM into RS - load use
+					// 4 = put the result of previous MEM into RT - load use
 					forward = 1;
 
 					// if the hazard is a load-use hazard, a stall must still occur
 					// becuase the loaded values is not ready until the mem stage
 					if(EX_MEM.type == 2){ // 2 = load instruction
+						forward = 3; // forward from MEM
 						IF_ID.ex = 0;
 						IF_ID.id = 0;
 						IF_ID.i = 0;
@@ -1009,6 +1026,7 @@ void ID() // IF_ID > ID_EX
 					forward = 2;
 					// if it is a load instruction, must stall
 					if(EX_MEM.type == 2){
+						forward = 4; // forward from MEM
 						IF_ID.ex = 0;
 						IF_ID.id = 0;
 						IF_ID.i = 0;
