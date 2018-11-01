@@ -100,6 +100,18 @@ char * getReg(int temp){
 	else if(temp == 27){
 		return "$k1";
 	}
+	else if(temp == 28){
+		return "$gp";
+	}
+	else if(temp == 29){
+		return "$sp";
+	}
+	else if(temp == 30){
+		return "$fp";
+	}
+	else if(temp == 31){
+		return "$ra";
+	}
 	return NULL;
 }
 
@@ -389,7 +401,7 @@ void init_memory() {
 /**************************************************************/
 void load_program() {                   
 	FILE * fp;
-	int i, word;
+	int i, word, j;
 	uint32_t address;
 
 	/* Open program file. */
@@ -402,11 +414,13 @@ void load_program() {
 	/* Read in the program. */
 
 	i = 0;
+	j=0;
 	while( fscanf(fp, "%x\n", &word) != EOF ) {
 		address = MEM_TEXT_BEGIN + i;
 		mem_write_32(address, word);
-		printf("writing 0x%08x into address 0x%08x (%d)\n", word, address, address);
+		printf("%d. writing 0x%08x into address 0x%08x (%d)\n", j, word, address, address);
 		i += 4;
+		j++;
 	}
 	PROGRAM_SIZE = i/4;
 	printf("Program loaded into memory.\n%d words written into memory.\n\n", PROGRAM_SIZE);
@@ -523,18 +537,19 @@ void MEM() // EX_MEM > MEM_WB
 				mem_write_32(EX_MEM.ALUOutput, EX_MEM.B & 0x0000FFFF);
 				break;
 		}
-		MEM_WB.LMD = EX_MEM.LMD;
-		MEM_WB.ALUOutput = EX_MEM.ALUOutput;
-		MEM_WB.IR = EX_MEM.IR;
-		MEM_WB.HI = EX_MEM.HI;
-		MEM_WB.LO = EX_MEM.LO;
-		MEM_WB.type = EX_MEM.type;
-		MEM_WB.RS = EX_MEM.RS;
-		MEM_WB.RT = EX_MEM.RT;
-		MEM_WB.RD = EX_MEM.RD;
-		MEM_WB.RegWrite = EX_MEM.RegWrite;
+		
 		
 	}
+	MEM_WB.LMD = EX_MEM.LMD;
+	MEM_WB.ALUOutput = EX_MEM.ALUOutput;
+	MEM_WB.IR = EX_MEM.IR;
+	MEM_WB.HI = EX_MEM.HI;
+	MEM_WB.LO = EX_MEM.LO;
+	MEM_WB.type = EX_MEM.type;
+	MEM_WB.RS = EX_MEM.RS;
+	MEM_WB.RT = EX_MEM.RT;
+	MEM_WB.RD = EX_MEM.RD;
+	MEM_WB.RegWrite = EX_MEM.RegWrite;
 	MEM_WB.wb = EX_MEM.wb;
 	// if forwarding is enabled, and a load-use stall occurred, this just stops the stalling
 	if(ENABLE_FORWARDING){
@@ -622,7 +637,8 @@ void EX() //ID_EX > EX_MEM
 					IF_ID.id = 0;
 					branch = true;
 					printf("# JR\n");
-					jmpBy = IF_ID.A - (CURRENT_STATE.PC-8);
+					jmpBy = ID_EX.A - (CURRENT_STATE.PC);
+					printf("RS=%x, jmpBy=%x\n",ID_EX.A, jmpBy);
 				}
 				// ADDI
 				else{
@@ -636,13 +652,15 @@ void EX() //ID_EX > EX_MEM
 			case 0x00000009:
 				// JALR
 				if(ID_EX.right){
+					ID_EX.type = 0;
 					IF_ID.id = 0;
 					branch = true;
 					printf("# JALR\n");
-					IF_ID.ALUOutput = CURRENT_STATE.PC;
-					jmpBy =  IF_ID.A - (CURRENT_STATE.PC-8);
+					//ID_EX.ALUOutput = CURRENT_STATE.PC; // ################################# <- this works with forwarding on but not off ???????????????????????????????????????
+					CURRENT_STATE.REGS[ID_EX.RD] = CURRENT_STATE.PC; // already at PC+8 ###### <- this works with forwarding off but not on ???????????????????????????????????????
+					jmpBy =  ID_EX.A - (CURRENT_STATE.PC);
 				// ADDIU
-				}else if(ID_EX.left){
+				}else{
 					printf("# ADDIU\n");
 					//printf("A=%x, B=%x\n",ID_EX.A, ID_EX.imm);
 					ID_EX.ALUOutput = ID_EX.A + ID_EX.imm;
@@ -833,7 +851,7 @@ void EX() //ID_EX > EX_MEM
 					if(((IF_ID.A & 0x80000000)>>31)){
 						IF_ID.id = 0;
 						branch = true;
-						jmpBy = IF_ID.imm; // changed
+						jmpBy = IF_ID.imm-8; // changed
 					}
 
 				// SLL
@@ -854,15 +872,15 @@ void EX() //ID_EX > EX_MEM
 					IF_ID.id = 0;
 					branch = true;
 					printf("# J\n");
-					target = IF_ID.IR & 0x03FFFFFF;
+					target = ID_EX.IR & 0x03FFFFFF;
 		    			target = target << 2;
 					highBits = 0xF0000000 & (CURRENT_STATE.PC-8);
 					jmpBy = (target | highBits);// - CURRENT_STATE.PC;
 				
 					// try to find the offset, so that we can jump to that address
 					IF_ID.imm = jmpBy - (CURRENT_STATE.PC-8);
-					jmpBy = IF_ID.imm;
-					
+					jmpBy = IF_ID.imm-8;
+					printf("J, at %x branching by %x to %x\n",CURRENT_STATE.PC-8, jmpBy, CURRENT_STATE.PC + jmpBy);
 					//printf("target=%d[0x%x]\njmpBy=%d [0x%x]\n", CURRENT_STATE.PC, CURRENT_STATE.PC, jmpBy, jmpBy);
 				}
 				break;
@@ -873,16 +891,16 @@ void EX() //ID_EX > EX_MEM
 					IF_ID.id = 0;
 					branch = true;
 					printf("# JAL\n");
-					target = IF_ID.IR & 0x03FFFFFF;
+					target = ID_EX.IR & 0x03FFFFFF;
 					target = target << 2;
 					highBits = 0xF0000000 & (CURRENT_STATE.PC-8);
 					jmpBy = (target | highBits);
 				
 					// try to find the offset, so that we can jump to that address
 					IF_ID.imm = jmpBy - (CURRENT_STATE.PC-8);
-					jmpBy = IF_ID.imm;
+					jmpBy = IF_ID.imm-8;
 					
-					NEXT_STATE.REGS[31] = CURRENT_STATE.PC;
+					CURRENT_STATE.REGS[31] = CURRENT_STATE.PC;
 				}				
 				// SRA
 				else if(ID_EX.right){
@@ -965,9 +983,10 @@ void EX() //ID_EX > EX_MEM
 					ID_EX.imm = ID_EX.imm | 0xFFFF0000;
 				}
 				if(ID_EX.A == ID_EX.B){
+					printf("BEQ is equal, at %x branching by %x to %x\n",CURRENT_STATE.PC-8,ID_EX.imm, CURRENT_STATE.PC + ID_EX.imm-8);
 					IF_ID.id = 0;
 					branch = true;
-					jmpBy = ID_EX.imm;
+					jmpBy = ID_EX.imm-8;
 				}
 				break;
 
@@ -980,9 +999,10 @@ void EX() //ID_EX > EX_MEM
 					ID_EX.imm = ID_EX.imm | 0xFFFF0000;
 				}
 				if(ID_EX.A != ID_EX.B){
+					printf("BNE is not equal, at %x branching by %x to %x\n",CURRENT_STATE.PC,ID_EX.imm, CURRENT_STATE.PC - 8 + ID_EX.imm);
 					IF_ID.id = 0;
 					branch = true;
-					jmpBy = ID_EX.imm;
+					jmpBy = ID_EX.imm-8;
 				}
 				break;
 
@@ -996,7 +1016,7 @@ void EX() //ID_EX > EX_MEM
 				if(((ID_EX.A & 0x80000000)>>31) || (ID_EX.A == 0x00)){
 					IF_ID.id = 0;
 					branch = true;
-					jmpBy = ID_EX.imm;
+					jmpBy = ID_EX.imm-8;
 				}
 				break;
 
@@ -1011,7 +1031,7 @@ void EX() //ID_EX > EX_MEM
 				if(((ID_EX.A & 0x80000000)>>31) == 0x0 ){
 					IF_ID.id = 0;
 					branch = true;
-					jmpBy = ID_EX.imm;
+					jmpBy = ID_EX.imm-8;
 				}
 				break;
 
@@ -1026,7 +1046,7 @@ void EX() //ID_EX > EX_MEM
 				if(((ID_EX.A & 0x80000000)>>31) == 0x0 && (ID_EX.A != 0x00)){
 					IF_ID.id = 0;
 					branch = true;
-					jmpBy = ID_EX.imm;
+					jmpBy = ID_EX.imm-8;
 				}
 				break;
 
@@ -1327,7 +1347,7 @@ void IF() // IF_ID
 		if(IF_ID.id == 0){
 			IF_ID.id = 1;
 			IF_ID.IR = mem_read_32(CURRENT_STATE.PC + jmpBy);
-			CURRENT_STATE.PC = CURRENT_STATE.PC + 4;		
+			CURRENT_STATE.PC = CURRENT_STATE.PC + jmpBy + 4;		
 		}else{
 			//IF_ID.id = 1;
 			IF_ID.IR = mem_read_32(CURRENT_STATE.PC);
@@ -1370,7 +1390,7 @@ void print_program(){
 	
 	for(i=0; i<PROGRAM_SIZE; i++){
 		addr = MEM_TEXT_BEGIN + (i*4);
-		printf("[0x%x]\t", addr);
+		printf("%d. [0x%x]\t",i, addr);
 		print_instruction(mem_read_32(addr));
 	}	
 }
