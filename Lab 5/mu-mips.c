@@ -463,12 +463,16 @@ void WB() //MEM_WB
 				//printf("WB STAGE:\nRD=%d\nLMD=%x\n",MEM_WB.RD, MEM_WB.ALUOutput);
 				CURRENT_STATE.REGS[MEM_WB.RT] = MEM_WB.LMD;
 				break;
+			case 4:
+				CURRENT_STATE.HI = MEM_WB.HI;
+				CURRENT_STATE.LO = MEM_WB.LO;
+				break;
 			case 100:
 				// "Skip case"
 				break;
 		}
-		CURRENT_STATE.HI = MEM_WB.HI;
-		CURRENT_STATE.LO = MEM_WB.LO;
+		//CURRENT_STATE.HI = MEM_WB.HI;
+		//CURRENT_STATE.LO = MEM_WB.LO;
 		
 		
 		if((IF_ID.IR != 0) && (MEM_WB.IR == ins_hold) && !ENABLE_FORWARDING){
@@ -652,7 +656,7 @@ void EX() //ID_EX > EX_MEM
 			case 0x00000009:
 				// JALR
 				if(ID_EX.right){
-					ID_EX.type = 0;
+					//ID_EX.type = 0;
 					IF_ID.id = 0;
 					branch = true;
 					printf("# JALR\n");
@@ -699,6 +703,7 @@ void EX() //ID_EX > EX_MEM
 				if((ID_EX.prevIns == 0x00000010) | (ID_EX.prevIns == 0x00000012)){
 					printf("MULT: result is undefined.\n");
 				}else{
+					ID_EX.type = 4;
 					temp = ID_EX.A * ID_EX.B; // temp is 64 bits
 					ID_EX.HI = (temp & 0xFFFFFFFF00000000) >> 32;	// get high bits
 					ID_EX.LO = (temp & 0x00000000FFFFFFFF) & 0xFFFFFFFF;	// get low bits
@@ -712,6 +717,7 @@ void EX() //ID_EX > EX_MEM
 				if((ID_EX.prevIns == 0x00000010) | (ID_EX.prevIns == 0x00000012)){
 					printf("MULTU: result is undefined.\n");
 				}else{
+					ID_EX.type = 4;
 					temp = ID_EX.A * ID_EX.B; // temp is 64 bits
 					ID_EX.HI = (temp & 0xFFFFFFFF00000000) >> 32;	// get high bits
 					ID_EX.LO = temp & 0x00000000FFFFFFFF;		// get low bits
@@ -729,6 +735,7 @@ void EX() //ID_EX > EX_MEM
 					if(ID_EX.B == 0){
 						printf("DIV: cannot divide by 0.\n");
 					}else{
+						ID_EX.type = 4;
 						ID_EX.HI = ID_EX.A / ID_EX.B; // Div = A/B
 						ID_EX.LO = ID_EX.A % ID_EX.B; // REM = A%B
 					}
@@ -746,6 +753,7 @@ void EX() //ID_EX > EX_MEM
 					if(ID_EX.B == 0){
 						printf("DIV: cannot divide by 0.\n");
 					}else{
+						ID_EX.type = 4;
 						ID_EX.HI = ID_EX.A / ID_EX.B; // Div = A/B
 						ID_EX.LO = ID_EX.A % ID_EX.B; // REM = A%B
 					}
@@ -966,11 +974,13 @@ void EX() //ID_EX > EX_MEM
 				// MTHI
 				printf("# MTHI\n");
 				ID_EX.HI = ID_EX.A;
+				ID_EX.type = 4;
 				break;
 
 			case 0x00000013:
 				// MTLO
 				printf("# MTLO\n");
+				ID_EX.type = 4;
 				ID_EX.LO = ID_EX.A;
 				break;
 			case 0x00000004:
