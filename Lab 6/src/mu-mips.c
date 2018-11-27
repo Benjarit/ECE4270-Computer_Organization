@@ -498,17 +498,13 @@ void WB() //MEM_WB
 
 
 uint32_t read_cache(uint32_t add){
-	uint32_t byte_offset;
-	uint32_t word_offset;
-	uint32_t index;
-	uint32_t word;
-	byte_offset = add & 0x3;
-	word_offset = (add & 0xC) >> 2;
-	index = (add & 0xF0) >> 4;
-	tag = (add & 0XFFFFFF00) >> 8;
-	if((L1Cache.blocks[index].valid == 1) && (L1Cache.block[index].tag == tag)){
-		word = L1Cache.blocks[index].words[word_offset];			
-	}else{
+	//uint32_t byte_offset;
+	uint32_t word_offset = (add & 0xC) >> 2;
+	uint32_t index = (add & 0xF0) >> 4;
+	uint32_t word = L1Cache.blocks[index].words[word_offset];
+	uint32_t tag = (add & 0XFFFFFF00) >> 8;
+	//byte_offset = add & 0x3;
+	if((L1Cache.blocks[index].valid != 1) && (L1Cache.block[index].tag != tag)){			
 		//read a word
 		L1Cache.blocks[index].tag = tag;
 		L1Cache.blocks[index].words[0] = mem_read_32(add); 
@@ -516,12 +512,55 @@ uint32_t read_cache(uint32_t add){
 		L1Cache.blocks[index].words[2] = mem_read_32(add + 0x8);
 		L1Cache.blocks[index].words[3] = mem_read_32(add + 0xC);
 		word = L1Cache.blocks[index].words[word_offset];
+		//increment cache miss?
+	} else{
+		//increment cache hit
 	}					
 	return word;
 }
 
-void write_cache(uint32_t){
-	
+void write_cache(uint32_t add, uint32_t newData){
+    uint32_t word_offset = (addr & 0x0000000C) >> 2;
+    uint32_t index = (addr & 0x000000F0) >> 4;
+    uint32_t tag = (addr & 0xFFFFFF00) >> 8;
+    uint32_t data;
+    
+    if(L1Cache.blocks[index].tag != tag || L1Cache.blocks[index].valid != 1){
+        L1Cache.blocks[index].tag = tag;
+        L1Cache.blocks[index].words[0] = mem_read_32((add & 0xFFFFFFF0));
+        L1Cache.blocks[index].words[1] = mem_read_32((add & 0xFFFFFFF0) + 0x04);
+        L1Cache.blocks[index].words[2] = mem_read_32((add & 0xFFFFFFF0) + 0x08);
+        L1Cache.blocks[index].words[3] = mem_read_32((add & 0xFFFFFFF0) + 0x0C);
+        CACHE_MISS_FLAG = 1; //NEEDS TO BE IMPLEMENTED
+        L1Cache.blocks[index].valid = 1;
+        cache_misses++;
+    }else{
+        cache_hits++;
+    }
+    
+    switch((MEM_WB.IR & 0xFC000000) >> 26){
+        case 0x28: //SB
+            data = L1Cache.blocks[index].words[word_offset];
+            data = (data & 0xFFFFFF00) | (newData & 0x000000FF);
+            break;
+        case 0x29: //SH
+            data = L1Cache.blocks[index].words[word_offset];
+            data = (data & 0xFFFF0000) | (newData & 0x0000FFFF);
+            break;
+        case 0x2B: //SW
+            data = newData;
+            break;
+        default:
+            data = 0x00;
+            break;
+        
+    }
+    L1Cache.blocks[index].words[word_offset] = data;
+    
+    mem_write_32((add & 0xFFFFFFF0), L1Cache.blocks[index].words[0]);
+    mem_write_32(((add & 0xFFFFFFF0) + 0x04), L1Cache.blocks[index].words[1]);
+    mem_write_32(((add & 0xFFFFFFF0) + 0x08), L1Cache.blocks[index].words[2]);
+    mem_write_32(((add & 0xFFFFFFF0) + 0x0C), L1Cache.blocks[index].words[3]);
 }
 
 /************************************************************/
