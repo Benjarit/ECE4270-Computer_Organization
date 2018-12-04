@@ -16,7 +16,7 @@ int ENABLE_FORWARDING = 0; // forwarding is off by default
 bool same = false;
 bool branch;
 uint32_t hold;
-int CACHE_MISS_FLAG = 0;
+int C_MISS = 0;
 int C_COUNT = 0;
 
 
@@ -444,10 +444,10 @@ void handle_pipeline()
 	if(C_COUNT == 0){
 		WB();
 		MEM();
-		if(CACHE_MISS_FLAG == 1){
+		if(C_MISS == 1){
 			printf("100 cycle stall\n");
 			C_COUNT++;
-			printf("%d\n",C_COUNT);
+			//printf("%d\n",C_COUNT);
 			INSTRUCTION_COUNT++;
 			CYCLE_COUNT++;
 		}
@@ -458,12 +458,12 @@ void handle_pipeline()
 		}
 	}else{
 		C_COUNT++;
-		printf("%d\n",C_COUNT);
+		//printf("%d\n",C_COUNT);
 		INSTRUCTION_COUNT++;
 		CYCLE_COUNT++;
 		if(C_COUNT==100){
 			C_COUNT=0;
-			CACHE_MISS_FLAG=0;
+			C_MISS=0;
 		}
 	}
 	
@@ -537,7 +537,7 @@ uint32_t read_cache(uint32_t add){
 		L1Cache.blocks[index].words[3] = mem_read_32(add + 0xC);
 		word = L1Cache.blocks[index].words[word_offset];
 		//increment cache miss?
-		CACHE_MISS_FLAG = 1;
+		C_MISS = 1;
 		cache_misses++;
 	} else{
 		//increment cache hit
@@ -547,11 +547,10 @@ uint32_t read_cache(uint32_t add){
 	return word;
 }
 
-void write_cache(uint32_t instr, uint32_t add, uint32_t newData){
+void write_cache(uint32_t add, uint32_t toWrite){
     uint32_t word_offset = (add & 0x0000000C) >> 2;
     uint32_t index = (add & 0x000000F0) >> 4;
     uint32_t tag = (add & 0xFFFFFF00) >> 8;
-    uint32_t data;
     
     if(L1Cache.blocks[index].tag != tag || L1Cache.blocks[index].valid != 1){
         L1Cache.blocks[index].tag = tag;
@@ -559,40 +558,20 @@ void write_cache(uint32_t instr, uint32_t add, uint32_t newData){
         L1Cache.blocks[index].words[1] = mem_read_32((add & 0xFFFFFFF0) + 0x04);
         L1Cache.blocks[index].words[2] = mem_read_32((add & 0xFFFFFFF0) + 0x08);
         L1Cache.blocks[index].words[3] = mem_read_32((add & 0xFFFFFFF0) + 0x0C);
-        CACHE_MISS_FLAG = 1; //NEEDS TO BE IMPLEMENTED
+        C_MISS = 1; //NEEDS TO BE IMPLEMENTED
         L1Cache.blocks[index].valid = 1;
         cache_misses++;
     }else{
         cache_hits++;
     }
-    
-    switch(instr){
-        case 0x28: //SB
-        	printf("Cache SB\n");
-            data = L1Cache.blocks[index].words[word_offset];
-            data = (data & 0xFFFFFF00) | (newData & 0x000000FF);
-            break;
-        case 0x29: //SH
-        	printf("Cache SH\n");
-            data = L1Cache.blocks[index].words[word_offset];
-            data = (data & 0xFFFF0000) | (newData & 0x0000FFFF);
-            break;
-        case 0x2B: //SW
-        	printf("Cache SW\n");
-            data = newData;
-            break;
-        default:
-            data = 0x00;
-            break;
-        
-    }
-    L1Cache.blocks[index].words[word_offset] = data;
+
+    L1Cache.blocks[index].words[word_offset] = toWrite;
     
     mem_write_32((add & 0xFFFFFFF0), L1Cache.blocks[index].words[0]);
     mem_write_32(((add & 0xFFFFFFF0) + 0x04), L1Cache.blocks[index].words[1]);
     mem_write_32(((add & 0xFFFFFFF0) + 0x08), L1Cache.blocks[index].words[2]);
     mem_write_32(((add & 0xFFFFFFF0) + 0x0C), L1Cache.blocks[index].words[3]);
-    printf("Wrote to cache: %x\n", newData);
+    printf("Wrote to cache: %x\n", toWrite);
 }
 
 void print_cache(){
@@ -642,14 +621,14 @@ void MEM() // EX_MEM > MEM_WB
 				printf("# SW\n");
 				//printf("offset=%d\nbase=%d\nvalue=%x\n[rt]=%x\n", offset, base, location, value);
 				//mem_write_32(EX_MEM.ALUOutput, EX_MEM.B);
-				write_cache(EX_MEM.opcode, EX_MEM.ALUOutput, EX_MEM.B);
+				write_cache(EX_MEM.ALUOutput, EX_MEM.B);
 				break;
 			case 0x00000028:
 				// SB
 				printf("# SB\n");
 				//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
 				//mem_write_32(EX_MEM.ALUOutput, EX_MEM.B & 0x000000FF);
-				write_cache(EX_MEM.opcode, EX_MEM.ALUOutput, EX_MEM.B & 0x000000FF);
+				write_cache(EX_MEM.ALUOutput, EX_MEM.B & 0x000000FF);
 				break;
 
 			case 0x00000029:
@@ -657,7 +636,7 @@ void MEM() // EX_MEM > MEM_WB
 				printf("# SH\n");
 				//printf("offset=%d\nbase=%d\nvalue=%d\nrt=%d\n", offset, base, value, rt);
 				//mem_write_32(EX_MEM.ALUOutput, EX_MEM.B & 0x0000FFFF);
-				write_cache(EX_MEM.opcode, EX_MEM.ALUOutput, EX_MEM.B & 0x0000FFFF);
+				write_cache(EX_MEM.ALUOutput, EX_MEM.B & 0x0000FFFF);
 				break;
 		}
 		
